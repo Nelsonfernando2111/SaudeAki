@@ -1,59 +1,33 @@
-import { Tabs } from 'expo-router';
-import { ColorValue, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, fontFamily } from '@/src/theme';
+import { useEffect } from 'react';
+import { Stack } from 'expo-router';
 
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+import { obterMeuPerfilMedico } from '@/src/services/medico.service';
+import { useSessaoStore } from '@/src/store/sessao.store';
+import { colors } from '@/src/theme';
 
-function icone(ativo: IconName, inativo: IconName) {
-  return ({ color, focused }: { color: ColorValue; focused: boolean }) => (
-    <MaterialCommunityIcons
-      name={focused ? ativo : inativo}
-      size={24}
-      color={color as string}
-    />
-  );
-}
+export default function MedicoLayout() {
+  const medico = useSessaoStore((s) => s.medico);
+  const definirMedico = useSessaoStore((s) => s.definirMedico);
 
-export default function MedicoTabs() {
-  const insets = useSafeAreaInsets();
+  // Recarrega o perfil quando a app abre com sessão guardada
+  useEffect(() => {
+    if (!medico) obterMeuPerfilMedico().then(definirMedico).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <Tabs
+    <Stack
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarLabelStyle: { fontFamily: fontFamily.medium, fontSize: 11 },
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 60 + insets.bottom,
-          paddingTop: 6,
-          paddingBottom: Platform.OS === 'ios' ? insets.bottom : insets.bottom + 6,
-        },
+        animation: 'slide_from_right',
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Início', tabBarIcon: icone('home', 'home-outline') }}
+      <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+      <Stack.Screen
+        name="aguardando-aprovacao"
+        options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
       />
-      <Tabs.Screen
-        name="pacientes"
-        options={{ title: 'Pacientes', tabBarIcon: icone('account-group', 'account-group-outline') }}
-      />
-      <Tabs.Screen
-        name="pedidos"
-        options={{
-          title: 'Pedidos',
-          tabBarIcon: icone('clipboard-clock', 'clipboard-clock-outline'),
-        }}
-      />
-      <Tabs.Screen
-        name="perfil"
-        options={{ title: 'Perfil', tabBarIcon: icone('account', 'account-outline') }}
-      />
-    </Tabs>
+    </Stack>
   );
 }

@@ -1,136 +1,80 @@
-import axios from 'axios';
 import { api } from './api';
-import { pacientesMock, type PacienteMock } from '@/src/mocks/pacientes.mock';
-import type { Paciente } from '@/src/types';
+import type {
+  AtualizacaoPaciente,
+  CondicaoMedica,
+  Exame,
+  FichaEmergencia,
+  HistoricoClinico,
+  Paciente,
+  Page,
+  Prescricao,
+} from '@/src/types';
 
-export interface SessaoPaciente {
-  token: string;
-  paciente: Paciente;
+/* Secções 3 e 4 da API: paciente autenticado e histórico clínico.
+ * Onde aparece `id`, pode usar-se o UUID ou o código único (PAC-XXXX). */
+
+/* ---------- Paciente autenticado (/me) ---------- */
+
+export async function obterMeuPerfil(): Promise<Paciente> {
+  const { data } = await api.get<Paciente>('/pacientes/me');
+  return data;
 }
 
-export interface DadosRegisto {
-  nome: string;
-  contacto: string; // email ou telefone
-  senha: string;
+/** Atualização parcial: só mudam os campos enviados */
+export async function atualizarMeuPerfil(dados: AtualizacaoPaciente): Promise<Paciente> {
+  const { data } = await api.put<Paciente>('/pacientes/me', dados);
+  return data;
 }
 
-const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-function semSenha(p: PacienteMock): Paciente {
-  const { senha: _senha, ...resto } = p;
-  return resto;
+/** Regista o token FCM do telemóvel para receber pedidos de acesso por push */
+export async function registarTokenFcm(token: string): Promise<void> {
+  await api.put('/pacientes/me/fcm-token', { token });
 }
 
-/** Erros que vêm do backend e devem ser mostrados (não usam fallback) */
-function erroDeNegocio(erro: unknown): string | null {
-  if (axios.isAxiosError(erro) && erro.response) {
-    const status = erro.response.status;
-    if ([400, 401, 409].includes(status)) {
-      return erro.response.data?.message ?? 'Dados inválidos.';
-    }
-  }
-  return null;
+export async function obterMeuHistorico(): Promise<HistoricoClinico> {
+  const { data } = await api.get<HistoricoClinico>('/pacientes/me/historico');
+  return data;
 }
 
-/* ---------- LOGIN ---------- */
+/* ---------- Histórico de um paciente (médico) ---------- */
 
-export async function loginPaciente(
-  identificador: string,
-  senha: string
-): Promise<SessaoPaciente> {
-  try {
-    const { data } = await api.post<SessaoPaciente>('/auth/paciente/login', {
-      identificador,
-      senha,
-    });
-    return data;
-  } catch (erro) {
-    const msg = erroDeNegocio(erro);
-    if (msg) throw new Error(msg);
-    return loginMock(identificador, senha);
-  }
-}
-
-async function loginMock(identificador: string, senha: string): Promise<SessaoPaciente> {
-  await esperar(700);
-  const id = identificador.trim().toLowerCase();
-  const encontrado = pacientesMock.find(
-    (p) =>
-      p.codigo.toLowerCase() === id ||
-      p.email?.toLowerCase() === id ||
-      p.telefone === id
+/** Ficha de emergência: o médico não precisa de aprovação (fica registado) */
+export async function obterFichaEmergencia(id: string): Promise<FichaEmergencia> {
+  const { data } = await api.get<FichaEmergencia>(
+    `/pacientes/${encodeURIComponent(id)}/emergencia`
   );
-  if (!encontrado || encontrado.senha !== senha) {
-    throw new Error('Código, email/telefone ou senha incorretos.');
-  }
-  return { token: 'mock-token-paciente', paciente: semSenha(encontrado) };
+  return data;
 }
 
-/* ---------- REGISTO ---------- */
-
-export async function registarPaciente(dados: DadosRegisto): Promise<SessaoPaciente> {
-  try {
-    const { data } = await api.post<SessaoPaciente>('/auth/paciente/registo', dados);
-    return data;
-  } catch (erro) {
-    const msg = erroDeNegocio(erro);
-    if (msg) throw new Error(msg);
-    return registarMock(dados);
-  }
+/** Histórico completo: médico precisa de sessão ativa (senão 403) */
+export async function obterHistoricoCompleto(id: string): Promise<HistoricoClinico> {
+  const { data } = await api.get<HistoricoClinico>(`/pacientes/${encodeURIComponent(id)}`);
+  return data;
 }
 
-async function registarMock(dados: DadosRegisto): Promise<SessaoPaciente> {
-  await esperar(900);
-  const contacto = dados.contacto.trim().toLowerCase();
-  const existe = pacientesMock.some(
-    (p) => p.email?.toLowerCase() === contacto || p.telefone === contacto
+export async function listarCondicoes(id: string): Promise<CondicaoMedica[]> {
+  const { data } = await api.get<CondicaoMedica[]>(`/pacientes/${encodeURIComponent(id)}/condicoes`);
+  return data;
+}
+
+export async function listarExames(id: string, page = 0, size = 10): Promise<Page<Exame>> {
+  const { data } = await api.get<Page<Exame>>(`/pacientes/${encodeURIComponent(id)}/exames`, {
+    params: { page, size },
+  });
+  return data;
+}
+
+export async function listarPrescricoes(id: string): Promise<Prescricao[]> {
+  const { data } = await api.get<Prescricao[]>(
+    `/pacientes/${encodeURIComponent(id)}/prescricoes`
   );
-  if (existe) throw new Error('Já existe uma conta com este contacto.');
-
-  const eEmail = contacto.includes('@');
-  const novo: PacienteMock = {
-    id: `p${Date.now()}`,
-    codigo: `IDCLIN-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-    nome: dados.nome.trim(),
-    email: eEmail ? contacto : undefined,
-    telefone: eEmail ? undefined : contacto,
-    senha: dados.senha,
-    ativo: true,
-    tipoSanguineo: '—',
-    alergias: [],
-    condicoesCronicas: [],
-    medicacaoAtiva: [],
-    exames: [],
-  };
-  pacientesMock.push(novo);
-  return { token: 'mock-token-paciente', paciente: semSenha(novo) };
+  return data;
 }
-/* ---------- OBTER PACIENTE ---------- */
 
-export async function obterPaciente(id: string): Promise<Paciente | null> {
-  try {
-    const { data } = await api.get<Paciente>(`/pacientes/${id}`);
-    return data;
-  } catch {
-    await esperar(300);
-    const encontrado = pacientesMock.find((p) => p.id === id);
-    return encontrado ? semSenha(encontrado) : null;
-  }
-}
-/* ---------- PESQUISA (médico) ---------- */
-
-export async function pesquisarPacientes(termo: string): Promise<Paciente[]> {
-  try {
-    const { data } = await api.get<Paciente[]>('/pacientes', { params: { q: termo } });
-    return data;
-  } catch {
-    await esperar(300);
-    const t = termo.trim().toLowerCase();
-    const lista = t
-      ? pacientesMock.filter(
-          (p) => p.codigo.toLowerCase().includes(t) || p.nome.toLowerCase().includes(t)
-        )
-      : pacientesMock.slice(0, 3); // sem termo: "resultados recentes"
-    return lista.map(semSenha);
-  }
+/** Medicação atual: também acessível em emergência */
+export async function listarPrescricoesAtivas(id: string): Promise<Prescricao[]> {
+  const { data } = await api.get<Prescricao[]>(
+    `/pacientes/${encodeURIComponent(id)}/prescricoes/ativas`
+  );
+  return data;
 }

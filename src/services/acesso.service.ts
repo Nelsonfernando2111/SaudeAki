@@ -1,50 +1,24 @@
 import { api } from './api';
-import { acessosMock } from '@/src/mocks/acessos.mock';
-import { pacientesMock } from '@/src/mocks/pacientes.mock';
-import type { Consulta, RegistoAcesso } from '@/src/types';
+import type { Page, RegistoAcesso, SessaoAcesso } from '@/src/types';
 
-const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/* Auditoria e sessões de acesso do paciente autenticado */
 
-export async function obterAcessos(pacienteId: string): Promise<RegistoAcesso[]> {
-  try {
-    const { data } = await api.get<RegistoAcesso[]>(`/pacientes/${pacienteId}/acessos`);
-    return data;
-  } catch {
-    await esperar(300);
-    const lista = acessosMock[pacienteId] ?? [];
-    return [...lista].sort((a, b) => b.data.localeCompare(a.data));
-  }
+/** GET /pacientes/me/acessos — quem acedeu ao histórico, do mais recente */
+export async function listarMeusAcessos(page = 0, size = 20): Promise<Page<RegistoAcesso>> {
+  const { data } = await api.get<Page<RegistoAcesso>>('/pacientes/me/acessos', {
+    params: { page, size },
+  });
+  return data;
 }
-/** Últimos pacientes consultados por um médico (um registo por paciente) */
-export async function listarConsultasMedico(medicoId: string): Promise<Consulta[]> {
-  try {
-    const { data } = await api.get<Consulta[]>(`/medicos/${medicoId}/consultas`);
-    return data;
-  } catch {
-    await esperar(250);
-    const todas: Consulta[] = [];
 
-    for (const [pacienteId, registos] of Object.entries(acessosMock)) {
-      const paciente = pacientesMock.find((p) => p.id === pacienteId);
-      if (!paciente) continue;
-      registos
-        .filter((r) => r.medico.id === medicoId)
-        .forEach((r) =>
-          todas.push({
-            id: r.id,
-            paciente: { id: paciente.id, codigo: paciente.codigo, nome: paciente.nome },
-            tipo: r.tipo,
-            data: r.data,
-          })
-        );
-    }
+/** GET /pacientes/me/sessoes — médicos com acesso completo neste momento */
+export async function listarMinhasSessoes(): Promise<SessaoAcesso[]> {
+  const { data } = await api.get<SessaoAcesso[]>('/pacientes/me/sessoes');
+  return data;
+}
 
-    todas.sort((a, b) => b.data.localeCompare(a.data));
-    const vistos = new Set<string>();
-    return todas.filter((c) => {
-      if (vistos.has(c.paciente.id)) return false;
-      vistos.add(c.paciente.id);
-      return true;
-    });
-  }
+/** PUT /sessoes/{id}/revogar — corta o acesso do médico de imediato */
+export async function revogarSessao(id: number): Promise<SessaoAcesso> {
+  const { data } = await api.put<SessaoAcesso>(`/sessoes/${id}/revogar`);
+  return data;
 }

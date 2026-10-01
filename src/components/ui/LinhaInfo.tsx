@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Tocavel } from '@/src/components/anim/Tocavel';
 import { colors, fontFamily, spacing } from '@/src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -8,7 +9,7 @@ interface LinhaInfoProps {
   icone: IconName;
   cor?: string;
   titulo: string;
-  valor?: string;
+  valor?: string | null;
   onPress?: () => void;
   ultima?: boolean;
 }
@@ -21,23 +22,34 @@ export function LinhaInfo({
   onPress,
   ultima = false,
 }: LinhaInfoProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [
-        styles.linha,
-        !ultima && styles.separador,
-        pressed && { opacity: 0.7 },
-      ]}
-    >
+  const conteudo = (
+    <>
       <MaterialCommunityIcons name={icone} size={22} color={cor} />
       <Text style={styles.titulo}>{titulo}</Text>
-      {valor ? <Text style={styles.valor}>{valor}</Text> : null}
+      {valor ? (
+        <Text style={styles.valor} numberOfLines={1}>
+          {valor}
+        </Text>
+      ) : null}
       {onPress ? (
         <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
       ) : null}
-    </Pressable>
+    </>
+  );
+
+  if (!onPress) {
+    return <View style={[styles.linha, !ultima && styles.separador]}>{conteudo}</View>;
+  }
+
+  return (
+    <Tocavel
+      onPress={onPress}
+      escala={0.99}
+      accessibilityRole="button"
+      style={[styles.linha, !ultima && styles.separador]}
+    >
+      {conteudo}
+    </Tocavel>
   );
 }
 
@@ -59,6 +71,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   valor: {
+    maxWidth: '50%',
     fontFamily: fontFamily.regular,
     fontSize: 14,
     color: colors.textSecondary,

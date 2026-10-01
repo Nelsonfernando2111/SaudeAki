@@ -1,20 +1,21 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { LinhaInfo } from '@/src/components/ui/LinhaInfo';
+import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
+import { Cabecalho } from '@/src/components/ui/Cabecalho';
+import { LinhaInfo } from '@/src/components/ui/LinhaInfo';
 import { useSessaoStore } from '@/src/store/sessao.store';
+import { tipoSanguineo } from '@/src/utils/clinico';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
-
-const plural = (n: number) => `${n} ${n === 1 ? 'registada' : 'registadas'}`;
 
 export default function Perfil() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const paciente = useSessaoStore((s) => s.paciente);
   const sair = useSessaoStore((s) => s.sair);
+  const [aSair, setASair] = useState(false);
 
   function confirmarSaida() {
     Alert.alert('Terminar sessão', 'Tem a certeza que deseja sair?', [
@@ -23,6 +24,7 @@ export default function Perfil() {
         text: 'Sair',
         style: 'destructive',
         onPress: async () => {
+          setASair(true);
           await sair();
           router.replace('/(auth)/escolher-perfil' as any);
         },
@@ -30,31 +32,20 @@ export default function Perfil() {
     ]);
   }
 
-  if (!paciente) return null;
-
   return (
     <View style={styles.container}>
-      <View style={[styles.cabecalho, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.cabecalhoTitulo}>Meu Perfil</Text>
-      </View>
+      <Cabecalho titulo="Meu Perfil" />
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Avatar e identificação */}
-        <View style={styles.identificacao}>
-          <View style={styles.avatar}>
-            <MaterialCommunityIcons name="account" size={56} color={colors.primary} />
-          </View>
-          <Text style={styles.nome}>{paciente.nome}</Text>
-          <Text style={styles.codigo}>{paciente.codigo}</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInDown.duration(350)} style={styles.identificacao}>
+          <Avatar nome={paciente?.nomeCompleto} tamanho={96} />
+          <Text style={styles.nome}>{paciente?.nomeCompleto ?? '—'}</Text>
+          <Text style={styles.codigo}>{paciente?.codUnico}</Text>
+        </Animated.View>
 
-        {/* Lista */}
-        <View style={styles.cartao}>
+        <Animated.View entering={FadeInDown.delay(80).duration(350)} style={styles.cartao}>
           <LinhaInfo
-            icone="account-outline"
+            icone="account-edit-outline"
             titulo="Dados pessoais"
             onPress={() => router.push('/(paciente)/dados-pessoais' as any)}
           />
@@ -62,27 +53,30 @@ export default function Perfil() {
             icone="water-outline"
             cor={colors.error}
             titulo="Tipo sanguíneo"
-            valor={paciente.tipoSanguineo}
+            valor={tipoSanguineo(paciente?.grupoSanguineo, paciente?.fatorRh)}
+          />
+          <LinhaInfo icone="phone-outline" titulo="Telefone" valor={paciente?.telefone} />
+          <LinhaInfo
+            icone="shield-lock-outline"
+            titulo="Quem acedeu aos meus dados"
+            onPress={() => router.push('/(paciente)/(tabs)/acessos' as any)}
           />
           <LinhaInfo
-            icone="flower-pollen-outline"
-            cor={colors.error}
-            titulo="Alergias"
-            valor={plural(paciente.alergias.length)}
-            onPress={() => router.push('/(paciente)/(tabs)/historico' as any)}
-          />
-          <LinhaInfo
-            icone="heart-pulse"
-            cor={colors.warning}
-            titulo="Condições crónicas"
-            valor={plural(paciente.condicoesCronicas.length)}
-            onPress={() => router.push('/(paciente)/(tabs)/historico' as any)}
+            icone="lock-reset"
+            titulo="Alterar senha"
+            onPress={() => router.push('/alterar-senha' as any)}
             ultima
           />
-        </View>
+        </Animated.View>
 
         <View style={styles.sair}>
-          <Button titulo="Terminar sessão" variante="perigo" onPress={confirmarSaida} />
+          <Button
+            titulo="Terminar sessão"
+            icone="logout"
+            variante="perigoContorno"
+            onPress={confirmarSaida}
+            carregando={aSair}
+          />
         </View>
       </ScrollView>
     </View>
@@ -91,35 +85,16 @@ export default function Perfil() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  cabecalho: {
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
-    paddingBottom: spacing.lg,
-  },
-  cabecalhoTitulo: { fontFamily: fontFamily.semibold, fontSize: 18, color: colors.white },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  identificacao: { alignItems: 'center', marginBottom: spacing.xl },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
+  identificacao: { alignItems: 'center', marginBottom: spacing.xl, gap: 2 },
   nome: {
     fontFamily: fontFamily.semibold,
     fontSize: 18,
-    color: colors.text,
+    color: colors.primaryDark,
     textAlign: 'center',
+    marginTop: spacing.md,
   },
-  codigo: {
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
+  codigo: { fontFamily: fontFamily.medium, fontSize: 13, color: colors.textSecondary },
   cartao: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 /** Devolve os segundos que faltam até `expiraEm` (ISO). */
-export function useContagem(expiraEm?: string) {
+export function useContagem(expiraEm?: string | null) {
   const [segundos, setSegundos] = useState(0);
 
   useEffect(() => {

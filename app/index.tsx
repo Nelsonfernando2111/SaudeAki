@@ -1,40 +1,15 @@
-﻿import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { Logo } from '@/src/components/shared/Logo';
 import { colors, fontFamily } from '@/src/theme';
 import { obterSessao } from '@/src/utils/sessao';
 
-const DURACAO_MINIMA_MS = 2200;
+const DURACAO_MINIMA_MS = 1800;
 
 export default function Splash() {
   const router = useRouter();
-  const opacidade = useRef(new Animated.Value(0)).current;
-  const escala = useRef(new Animated.Value(0.8)).current;
-  const opacidadeRodape = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacidade, {
-        toValue: 1,
-        duration: 700,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(escala, {
-        toValue: 1,
-        friction: 6,
-        tension: 60,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      Animated.timing(opacidadeRodape, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, [opacidade, escala, opacidadeRodape]);
 
   useEffect(() => {
     let cancelado = false;
@@ -63,12 +38,12 @@ export default function Splash() {
 
   return (
     <View style={styles.container}>
-      <Animated.View style={{ opacity: opacidade, transform: [{ scale: escala }] }}>
-        <Logo tamanho={110} mostrarSlogan variante="claro" />
+      <Animated.View entering={ZoomIn.springify().damping(12)}>
+        <Logo tamanho={110} mostrarSlogan variante="escuro" />
       </Animated.View>
 
-      <Animated.View style={[styles.rodape, { opacity: opacidadeRodape }]}>
-        <ActivityIndicator color={colors.white} />
+      <Animated.View entering={FadeIn.delay(600).duration(500)} style={styles.rodape}>
+        <ActivityIndicator color={colors.primary} />
         <Text style={styles.versao}>v1.0.0</Text>
       </Animated.View>
     </View>
@@ -78,7 +53,7 @@ export default function Splash() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -91,6 +66,6 @@ const styles = StyleSheet.create({
   versao: {
     fontFamily: fontFamily.regular,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
   },
 });

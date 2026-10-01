@@ -1,52 +1,66 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { estadoEfetivo, INFO_ESTADO } from '@/src/utils/pedidos';
-import { formatarDataHora } from '@/src/utils/datas';
+import { Tocavel } from '@/src/components/anim/Tocavel';
+import { Avatar } from '@/src/components/ui/Avatar';
+import { Etiqueta } from '@/src/components/ui/Etiqueta';
+import { estadoEfetivo, INFO_ESTADO, sessaoProvavelmenteAtiva } from '@/src/utils/pedidos';
+import { formatarDiaRelativo } from '@/src/utils/datas';
 import type { PedidoAcesso } from '@/src/types';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
-export function CartaoPedido({ pedido }: { pedido: PedidoAcesso }) {
+/** Abre o ecrã certo para um pedido feito pelo médico */
+export function useAbrirPedido() {
   const router = useRouter();
+  return (pedido: PedidoAcesso) => {
+    const estado = estadoEfetivo(pedido);
+    if (estado === 'PENDENTE') {
+      router.push({
+        pathname: '/(medico)/aguardando-aprovacao',
+        params: {
+          id: String(pedido.id),
+          pacienteId: pedido.pacienteId,
+          pacienteNome: pedido.pacienteNome,
+          dataExpiracao: pedido.dataExpiracao,
+        },
+      } as any);
+    } else if (sessaoProvavelmenteAtiva(pedido)) {
+      router.push(`/(medico)/historico/${pedido.pacienteId}` as any);
+    } else {
+      router.push(`/(medico)/paciente/${pedido.pacienteId}` as any);
+    }
+  };
+}
+
+export function CartaoPedido({ pedido }: { pedido: PedidoAcesso }) {
+  const abrir = useAbrirPedido();
   const estado = estadoEfetivo(pedido);
   const info = INFO_ESTADO[estado];
-
-  function abrir() {
-    if (estado === 'pendente') {
-      router.push({ pathname: '/(medico)/aguardando-aprovacao', params: { id: pedido.id } } as any);
-    } else if (estado === 'aprovado') {
-      router.push(`/(medico)/historico/${pedido.paciente.id}` as any);
-    }
-  }
-
-  const clicavel = estado === 'pendente' || estado === 'aprovado';
+  const ativo = sessaoProvavelmenteAtiva(pedido);
 
   return (
-    <Pressable
-      onPress={abrir}
-      disabled={!clicavel}
-      style={({ pressed }) => [styles.cartao, pressed && { opacity: 0.8 }]}
-    >
-      <View style={styles.avatar}>
-        <MaterialCommunityIcons name="account" size={24} color={colors.textSecondary} />
-      </View>
+    <Tocavel onPress={() => abrir(pedido)} style={styles.cartao} accessibilityRole="button">
+      <Avatar nome={pedido.pacienteNome} tagTransicao={`paciente-${pedido.pacienteId}`} />
 
       <View style={{ flex: 1 }}>
-        <Text style={styles.nome}>{pedido.paciente.nome}</Text>
-        <Text style={styles.meta}>
-          {pedido.paciente.codigo} · {formatarDataHora(pedido.criadoEm)}
-        </Text>
-        <View style={[styles.badge, { backgroundColor: info.fundo }]}>
-          <MaterialCommunityIcons name={info.icone} size={13} color={info.cor} />
-          <Text style={[styles.badgeTexto, { color: info.cor }]}>{info.label}</Text>
+        <Text style={styles.nome}>{pedido.pacienteNome}</Text>
+        <Text style={styles.meta}>{formatarDiaRelativo(pedido.dataPedido)}</Text>
+        <View style={styles.etiquetas}>
+          <Etiqueta texto={info.label} cor={info.cor} fundo={info.fundo} icone={info.icone} />
+          {ativo ? (
+            <Etiqueta
+              texto="Sessão ativa"
+              cor={colors.purple}
+              fundo={colors.purpleSoft}
+              icone="lock-open-outline"
+            />
+          ) : null}
         </View>
       </View>
 
-      {clicavel ? (
-        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
-      ) : null}
-    </Pressable>
+      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+    </Tocavel>
   );
 }
 
@@ -61,25 +75,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   nome: { fontFamily: fontFamily.semibold, fontSize: 15, color: colors.text },
   meta: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-    marginTop: spacing.sm,
-  },
-  badgeTexto: { fontFamily: fontFamily.medium, fontSize: 12 },
+  etiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
 });

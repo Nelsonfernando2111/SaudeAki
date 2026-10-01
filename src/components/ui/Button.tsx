@@ -1,56 +1,69 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Tocavel } from '@/src/components/anim/Tocavel';
 import { colors, fontFamily, radius } from '@/src/theme';
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+type Variante = 'primario' | 'secundario' | 'perigo' | 'perigoContorno' | 'sucesso' | 'link';
 
 interface ButtonProps {
   titulo: string;
   onPress: () => void;
-  variante?: 'primario' | 'secundario' | 'perigo' | 'link';
+  variante?: Variante;
+  icone?: IconName;
   carregando?: boolean;
   desativado?: boolean;
 }
+
+const COR_TEXTO: Record<Variante, string> = {
+  primario: colors.white,
+  sucesso: colors.white,
+  perigo: colors.white,
+  secundario: colors.primary,
+  perigoContorno: colors.error,
+  link: colors.primary,
+};
+
+const COR_RIPPLE: Record<Variante, string> = {
+  primario: 'rgba(255,255,255,0.28)',
+  sucesso: 'rgba(255,255,255,0.28)',
+  perigo: 'rgba(255,255,255,0.28)',
+  secundario: 'rgba(37,99,235,0.14)',
+  perigoContorno: 'rgba(239,68,68,0.14)',
+  link: 'rgba(37,99,235,0.10)',
+};
 
 export function Button({
   titulo,
   onPress,
   variante = 'primario',
+  icone,
   carregando = false,
   desativado = false,
 }: ButtonProps) {
   const inativo = desativado || carregando;
-  const corTexto =
-    variante === 'primario' || variante === 'perigo'
-      ? colors.white
-      : colors.primary;
+  const corTexto = COR_TEXTO[variante];
 
   return (
-    <Pressable
+    <Tocavel
       onPress={onPress}
       disabled={inativo}
       accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.base,
-        variante === 'primario' && styles.primario,
-        variante === 'secundario' && styles.secundario,
-        variante === 'perigo' && styles.perigo,
-        variante === 'link' && styles.link,
-        inativo && styles.inativo,
-        pressed && { opacity: 0.85 },
-      ]}
+      accessibilityState={{ disabled: inativo, busy: carregando }}
+      corRipple={COR_RIPPLE[variante]}
+      style={[styles.base, styles[variante], inativo && styles.inativo]}
     >
       {carregando ? (
         <ActivityIndicator color={corTexto} />
       ) : (
-        <Text
-          style={[
-            styles.texto,
-            { color: corTexto },
-            variante === 'link' && styles.textoLink,
-          ]}
-        >
-          {titulo}
-        </Text>
+        <View style={styles.linha}>
+          {icone ? <MaterialCommunityIcons name={icone} size={20} color={corTexto} /> : null}
+          <Text style={[styles.texto, { color: corTexto }, variante === 'link' && styles.textoLink]}>
+            {titulo}
+          </Text>
+        </View>
       )}
-    </Pressable>
+    </Tocavel>
   );
 }
 
@@ -62,13 +75,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   primario: { backgroundColor: colors.primary },
+  sucesso: { backgroundColor: colors.success },
+  perigo: { backgroundColor: colors.error },
   secundario: {
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
-  perigo: { backgroundColor: colors.error },
+  perigoContorno: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.error,
+  },
   link: { height: 40, backgroundColor: 'transparent' },
   inativo: { opacity: 0.6 },
   texto: { fontFamily: fontFamily.semibold, fontSize: 16 },

@@ -1,17 +1,36 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Extrapolation,
+  FadeInDown,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { obterPaciente } from '@/src/services/paciente.service';
+import { Skeleton } from '@/src/components/anim/Skeleton';
+import { Tocavel } from '@/src/components/anim/Tocavel';
+import { LogoMini } from '@/src/components/shared/LogoMini';
+import { Etiqueta } from '@/src/components/ui/Etiqueta';
+import { useRecurso } from '@/src/hooks/useRecurso';
+import { obterMeuHistorico } from '@/src/services/paciente.service';
+import { listarPedidos } from '@/src/services/pedido.service';
 import { useSessaoStore } from '@/src/store/sessao.store';
-import { obterSessao } from '@/src/utils/sessao';
-import { colors, fontFamily, radius, spacing } from '@/src/theme';
-import { criarPedidoDemo } from '@/src/services/pedido.service';
+import { toast } from '@/src/store/toast.store';
+import { plural, tipoSanguineo } from '@/src/utils/clinico';
+import { formatarHora } from '@/src/utils/datas';
+import { estadoEfetivo } from '@/src/utils/pedidos';
+import type { HistoricoClinico, PedidoAcesso } from '@/src/types';
+import { colors, fontFamily, radius, sombra, spacing } from '@/src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+const ALTURA_HEROI = 170;
 
 interface CartaoResumoProps {
   icone: IconName;
@@ -19,169 +38,235 @@ interface CartaoResumoProps {
   fundo: string;
   titulo: string;
   detalhe: string;
-  onPress?: () => void;
+  indice: number;
+  onPress: () => void;
 }
 
-function CartaoResumo({ icone, cor, fundo, titulo, detalhe, onPress }: CartaoResumoProps) {
+function CartaoResumo({ icone, cor, fundo, titulo, detalhe, indice, onPress }: CartaoResumoProps) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.cartaoResumo, pressed && { opacity: 0.85 }]}
-    >
-      <View style={[styles.cartaoIcone, { backgroundColor: fundo }]}>
-        <MaterialCommunityIcons name={icone} size={22} color={cor} />
-      </View>
-      <Text style={styles.cartaoTitulo}>{titulo}</Text>
-      <Text style={styles.cartaoDetalhe}>{detalhe}</Text>
-    </Pressable>
+    <Animated.View entering={FadeInDown.delay(80 + indice * 60).duration(350)} style={styles.cartaoResumoCaixa}>
+      <Tocavel onPress={onPress} style={styles.cartaoResumo} accessibilityRole="button">
+        <View style={[styles.cartaoIcone, { backgroundColor: fundo }]}>
+          <MaterialCommunityIcons name={icone} size={22} color={cor} />
+        </View>
+        <Text style={styles.cartaoTitulo}>{titulo}</Text>
+        <Text style={styles.cartaoDetalhe}>{detalhe}</Text>
+      </Tocavel>
+    </Animated.View>
   );
 }
-
-const plural = (n: number, singular: string, pluralTxt: string) =>
-  `${n} ${n === 1 ? singular : pluralTxt}`;
 
 export default function HomePaciente() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const paciente = useSessaoStore((s) => s.paciente);
   const definirPaciente = useSessaoStore((s) => s.definirPaciente);
-  const sair = useSessaoStore((s) => s.sair);
-  const [copiado, setCopiado] = useState(false);
 
-  // Recarrega o paciente (útil quando a app reabre com sessão guardada)
+  const historico = useRecurso<HistoricoClinico>(obterMeuHistorico, [], { aoFocar: true });
+  const pendentes = useRecurso(
+    () => listarPedidos({ estado: 'PENDENTE', size: 5 }).then((p) => p.content),
+    [],
+    { aoFocar: true }
+  );
+
+  // O histórico traz o perfil atualizado
   useEffect(() => {
-    let cancelado = false;
-    async function carregar() {
-      const sessao = await obterSessao();
-      if (!sessao?.id) {
-        if (!paciente) {
-          await sair();
-          router.replace('/(auth)/escolher-perfil' as any);
-        }
-        return;
-      }
-      const dados = await obterPaciente(sessao.id);
-      if (cancelado) return;
-      if (dados) {
-        definirPaciente(dados);
-      } else if (!paciente) {
-        await sair();
-        router.replace('/(auth)/escolher-perfil' as any);
-      }
-    }
-    carregar();
-    return () => {
-      cancelado = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (historico.dados?.paciente) definirPaciente(historico.dados.paciente);
+  }, [historico.dados, definirPaciente]);
+
+  /* ---------- Parallax do cabeçalho ---------- */
+  const scrollY = useSharedValue(0);
+  const aoRolar = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  const estiloHeroi = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [-100, 0, ALTURA_HEROI], [-50, 0, ALTURA_HEROI * 0.5], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [-100, 0], [1.08, 1], Extrapolation.CLAMP) },
+    ],
+    opacity: interpolate(scrollY.value, [0, ALTURA_HEROI * 0.8], [1, 0.2], Extrapolation.CLAMP),
+  }));
 
   async function copiarCodigo() {
     if (!paciente) return;
-    await Clipboard.setStringAsync(paciente.codigo);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
+    await Clipboard.setStringAsync(paciente.codUnico);
+    toast.sucesso('Código copiado');
   }
 
-  if (!paciente) {
-    return (
-      <View style={styles.carregando}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+  function abrirPedido(p: PedidoAcesso) {
+    router.push({
+      pathname: '/(paciente)/pedido-acesso',
+      params: {
+        id: String(p.id),
+        medicoNome: p.medicoNome,
+        unidadeSanitariaNome: p.unidadeSanitariaNome ?? '',
+        dataExpiracao: p.dataExpiracao,
+      },
+    } as any);
   }
 
-  const primeiroNome = paciente.nome.split(' ')[0];
+  function atualizar() {
+    historico.atualizar();
+    pendentes.recarregar();
+  }
+
+  const h = historico.dados;
+  const alergias = h?.condicoes.filter((c) => c.tipo === 'ALERGIA') ?? [];
+  const cronicas = h?.condicoes.filter((c) => c.tipo === 'DOENCA_CRONICA') ?? [];
+  const ativas = h?.prescricoes.filter((p) => p.ativa) ?? [];
+  const pedidosAbertos = (pendentes.dados ?? []).filter((p) => estadoEfetivo(p) === 'PENDENTE');
+  const primeiroNome = paciente?.nomeCompleto.split(' ')[0] ?? '';
+  const irHistorico = () => router.push('/(paciente)/(tabs)/historico' as any);
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Cabeçalho azul */}
-        <View style={[styles.cabecalho, { paddingTop: insets.top + spacing.lg }]}>
-          <Text style={styles.saudacao}>Olá, {primeiroNome} 👋</Text>
-          <Text style={styles.subSaudacao}>Aqui está um resumo da sua saúde</Text>
+      <Animated.ScrollView
+        onScroll={aoRolar}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={historico.aAtualizar}
+            onRefresh={atualizar}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <View style={styles.topo}>
+          <LogoMini />
         </View>
 
-        {/* Código único (sobreposto ao cabeçalho) */}
+        {/* Herói azul com parallax */}
+        <Animated.View style={[styles.heroi, estiloHeroi]}>
+          <MaterialCommunityIcons name="heart-pulse" size={120} color="rgba(255,255,255,0.12)" style={styles.heroiMarca} />
+          {paciente ? (
+            <>
+              <Text style={styles.saudacao}>Olá, {primeiroNome} 👋</Text>
+              <Text style={styles.subSaudacao}>Aqui está um resumo da sua saúde</Text>
+            </>
+          ) : (
+            <>
+              <Skeleton largura="55%" altura={24} style={{ backgroundColor: 'rgba(255,255,255,0.3)' }} />
+              <Skeleton largura="70%" altura={14} style={{ marginTop: 10, backgroundColor: 'rgba(255,255,255,0.3)' }} />
+            </>
+          )}
+        </Animated.View>
+
+        {/* Código único */}
         <View style={styles.cartaoCodigo}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.codigoLabel}>Código único</Text>
-            <Text style={styles.codigoValor}>{paciente.codigo}</Text>
+            {paciente ? (
+              <Text style={styles.codigoValor}>{paciente.codUnico}</Text>
+            ) : (
+              <Skeleton largura={140} altura={24} style={{ marginTop: 4 }} />
+            )}
+            <Text style={styles.codigoAjuda}>
+              Tipo sanguíneo: {tipoSanguineo(paciente?.grupoSanguineo, paciente?.fatorRh)}
+            </Text>
           </View>
-          <Pressable
+          <Tocavel
             onPress={copiarCodigo}
-            hitSlop={10}
-            style={[styles.botaoCopiar, copiado && { backgroundColor: colors.successSoft }]}
+            style={styles.botaoCopiar}
+            escala={0.9}
             accessibilityLabel="Copiar código"
           >
-            <MaterialCommunityIcons
-              name={copiado ? 'check' : 'content-copy'}
-              size={20}
-              color={copiado ? colors.success : colors.primary}
-            />
-          </Pressable>
+            <MaterialCommunityIcons name="content-copy" size={20} color={colors.primary} />
+          </Tocavel>
         </View>
+
+        {/* Pedidos de acesso pendentes */}
+        {pedidosAbertos.length > 0 ? (
+          <Animated.View entering={FadeInDown} style={styles.pendentes}>
+            <Text style={styles.secaoTitulo}>Pedidos de acesso</Text>
+            {pedidosAbertos.map((p) => (
+              <Tocavel key={p.id} onPress={() => abrirPedido(p)} style={styles.pedido}>
+                <View style={styles.pedidoIcone}>
+                  <MaterialCommunityIcons name="bell-ring-outline" size={22} color={colors.warningText} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pedidoNome}>{p.medicoNome}</Text>
+                  <Text style={styles.pedidoMeta}>
+                    {p.unidadeSanitariaNome ?? 'Unidade não indicada'} · {formatarHora(p.dataPedido)}
+                  </Text>
+                </View>
+                <Etiqueta texto="Responder" cor={colors.warningText} fundo={colors.warningSoft} />
+              </Tocavel>
+            ))}
+          </Animated.View>
+        ) : null}
 
         {/* Grelha de resumo */}
-        <View style={styles.grelha}>
-          <CartaoResumo
-            icone="flower-pollen-outline"
-            cor={colors.error}
-            fundo={colors.errorSoft}
-            titulo="Alergias"
-            detalhe={plural(paciente.alergias.length, 'registada', 'registadas')}
-            onPress={() => router.push('/(paciente)/(tabs)/historico' as any)}
-          />
-          <CartaoResumo
-            icone="shield-half-full"
-            cor={colors.success}
-            fundo={colors.successSoft}
-            titulo="Condições crónicas"
-            detalhe={plural(paciente.condicoesCronicas.length, 'registada', 'registadas')}
-            onPress={() => router.push('/(paciente)/(tabs)/historico' as any)}
-          />
-          <CartaoResumo
-            icone="pill"
-            cor={colors.primary}
-            fundo={colors.primarySoft}
-            titulo="Medicação ativa"
-            detalhe={plural(paciente.medicacaoAtiva.length, 'medicamento', 'medicamentos')}
-            onPress={() => router.push('/(paciente)/(tabs)/historico' as any)}
-          />
-          <CartaoResumo
-            icone="flask-outline"
-            cor={colors.primary}
-            fundo={colors.primarySoft}
-            titulo="Últimos exames"
-            detalhe={plural(paciente.exames.length, 'recente', 'recentes')}
-            onPress={() => router.push('/(paciente)/(tabs)/historico' as any)}
-          />
-        </View>
+        <Text style={[styles.secaoTitulo, styles.secaoMargem]}>O seu resumo</Text>
+        {historico.carregando ? (
+          <View style={styles.grelha}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={[styles.cartaoResumoCaixa, styles.cartaoResumo]}>
+                <Skeleton largura={40} altura={40} raio={12} />
+                <Skeleton largura="70%" altura={14} style={{ marginTop: spacing.md }} />
+                <Skeleton largura="50%" altura={12} style={{ marginTop: 6 }} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.grelha}>
+            <CartaoResumo
+              indice={0}
+              icone="flower-pollen-outline"
+              cor={colors.error}
+              fundo={colors.errorSoft}
+              titulo="Alergias"
+              detalhe={plural(alergias.length, 'registada', 'registadas')}
+              onPress={irHistorico}
+            />
+            <CartaoResumo
+              indice={1}
+              icone="heart-pulse"
+              cor={colors.success}
+              fundo={colors.successSoft}
+              titulo="Condições crónicas"
+              detalhe={plural(cronicas.length, 'registada', 'registadas')}
+              onPress={irHistorico}
+            />
+            <CartaoResumo
+              indice={2}
+              icone="pill"
+              cor={colors.purple}
+              fundo={colors.purpleSoft}
+              titulo="Medicação ativa"
+              detalhe={plural(ativas.length, 'medicamento', 'medicamentos')}
+              onPress={irHistorico}
+            />
+            <CartaoResumo
+              indice={3}
+              icone="flask-outline"
+              cor={colors.primary}
+              fundo={colors.primarySoft}
+              titulo="Exames"
+              detalhe={plural(h?.exames.length ?? 0, 'registado', 'registados')}
+              onPress={irHistorico}
+            />
+          </View>
+        )}
+
+        {historico.erro && !h ? (
+          <Text style={styles.erro}>{historico.erro.message} Puxe para atualizar.</Text>
+        ) : null}
 
         {/* Banner */}
-        <Pressable
+        <Tocavel
           style={styles.banner}
-          onPress={() => router.push('/(paciente)/(tabs)/perfil' as any)}
+          onPress={() => router.push('/(paciente)/dados-pessoais' as any)}
         >
+          <MaterialCommunityIcons name="account-edit-outline" size={24} color={colors.primary} />
           <Text style={styles.bannerTexto}>
-            Mantenha seus dados atualizados para um melhor atendimento.
+            Mantenha os seus dados atualizados para um melhor atendimento.
           </Text>
-          <MaterialCommunityIcons name="chevron-right" size={22} color={colors.white} />
-        </Pressable>
-                {/* DEMO: remover quando houver notificações reais */}
-        <Pressable
-          style={styles.demo}
-          onPress={() =>
-            router.push({
-              pathname: '/(paciente)/pedido-acesso',
-              params: { id: criarPedidoDemo(paciente) },
-            } as any)
-          }
-        >
-          <MaterialCommunityIcons name="bell-ring-outline" size={18} color={colors.primary} />
-          <Text style={styles.demoTexto}>Simular pedido de acesso (demo)</Text>
-        </Pressable>
-      </ScrollView>
+          <MaterialCommunityIcons name="chevron-right" size={22} color={colors.primary} />
+        </Tocavel>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -189,67 +274,89 @@ export default function HomePaciente() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { paddingBottom: spacing.xxl },
-  carregando: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-  cabecalho: {
+  topo: { paddingHorizontal: spacing.xl, marginBottom: spacing.lg },
+  heroi: {
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: 64,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
+    marginHorizontal: spacing.xl,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    paddingBottom: 56,
+    minHeight: ALTURA_HEROI - 40,
+    overflow: 'hidden',
   },
+  heroiMarca: { position: 'absolute', right: -16, bottom: -24 },
   saudacao: { fontFamily: fontFamily.semibold, fontSize: 24, color: colors.white },
   subSaudacao: {
     fontFamily: fontFamily.regular,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.9)',
     marginTop: 4,
   },
   cartaoCodigo: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
-    marginTop: -40,
+    marginHorizontal: spacing.xl + spacing.md,
+    marginTop: -36,
     padding: spacing.lg,
     borderRadius: radius.lg,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    ...sombra,
+    shadowOpacity: 0.12,
   },
   codigoLabel: { fontFamily: fontFamily.regular, fontSize: 13, color: colors.textSecondary },
   codigoValor: {
     fontFamily: fontFamily.bold,
     fontSize: 22,
-    color: colors.text,
+    color: colors.primaryDark,
     marginTop: 2,
     letterSpacing: 0.5,
   },
+  codigoAjuda: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   botaoCopiar: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  secaoTitulo: {
+    fontFamily: fontFamily.semibold,
+    fontSize: 16,
+    color: colors.text,
+    paddingHorizontal: spacing.xl,
+  },
+  secaoMargem: { marginTop: spacing.xl, marginBottom: spacing.md },
+  pendentes: { marginTop: spacing.xl, gap: spacing.md },
+  pedido: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.warning,
+    padding: spacing.lg,
+  },
+  pedidoIcone: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.warningSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pedidoNome: { fontFamily: fontFamily.semibold, fontSize: 15, color: colors.text },
+  pedidoMeta: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   grelha: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
-    marginTop: spacing.xl,
   },
+  cartaoResumoCaixa: { width: '47%', flexGrow: 1 },
   cartaoResumo: {
-    width: '48%',
-    flexGrow: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
@@ -271,13 +378,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  erro: {
+    fontFamily: fontFamily.regular,
+    fontSize: 13,
+    color: colors.error,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryFaint,
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
     marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
     padding: spacing.lg,
     borderRadius: radius.lg,
   },
@@ -285,21 +402,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fontFamily.medium,
     fontSize: 14,
-    color: colors.white,
+    color: colors.primaryDark,
     lineHeight: 20,
   },
-    demo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-  },
-  demoTexto: { fontFamily: fontFamily.medium, fontSize: 13, color: colors.primary },
 });

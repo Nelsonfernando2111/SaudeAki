@@ -6,9 +6,9 @@ export function LogoMini() {
   return (
     <View style={styles.container}>
       <View style={styles.icone}>
-        <MaterialCommunityIcons name="heart" size={32} color={colors.white} />
+        <MaterialCommunityIcons name="heart" size={32} color={colors.primary} />
         <View style={styles.cruz}>
-          <MaterialCommunityIcons name="plus-thick" size={16} color={colors.primaryDark} />
+          <MaterialCommunityIcons name="plus-thick" size={16} color={colors.white} />
         </View>
       </View>
       <View>
@@ -32,6 +32,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 2,
   },
-  nome: { fontFamily: fontFamily.bold, fontSize: 16, color: colors.white, letterSpacing: 1 },
-  slogan: { fontFamily: fontFamily.regular, fontSize: 11, color: 'rgba(255,255,255,0.8)' },
+  nome: { fontFamily: fontFamily.bold, fontSize: 16, color: colors.primaryDark, letterSpacing: 1 },
+  slogan: { fontFamily: fontFamily.regular, fontSize: 11, color: colors.textSecondary },
 });
