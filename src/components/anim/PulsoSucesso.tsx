@@ -32,11 +32,11 @@ export function PulsoSucesso({
   const anel = useSharedValue(0);
 
   useEffect(() => {
-    escala.value = withSequence(
+    escala.set(withSequence(
       withSpring(1.18, { damping: 6, stiffness: 260 }),
       withSpring(1, { damping: 10, stiffness: 200 })
-    );
-    anel.value = withDelay(120, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }));
+    ));
+    anel.set(withDelay(120, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) })));
   }, [escala, anel]);
 
   const estiloIcone = useAnimatedStyle(() => ({ transform: [{ scale: escala.value }] }));

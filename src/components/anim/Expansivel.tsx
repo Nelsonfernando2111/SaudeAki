@@ -31,10 +31,10 @@ export function Expansivel({
   const progresso = useSharedValue(inicialAberto ? 1 : 0);
 
   useEffect(() => {
-    progresso.value = withTiming(aberto ? 1 : 0, {
+    progresso.set(withTiming(aberto ? 1 : 0, {
       duration: 280,
       easing: Easing.out(Easing.cubic),
-    });
+    }));
   }, [aberto, progresso]);
 
   const estiloCorpo = useAnimatedStyle(() => ({
@@ -68,7 +68,7 @@ export function Expansivel({
         <View
           style={styles.medida}
           onLayout={(e) => {
-            altura.value = e.nativeEvent.layout.height;
+            altura.set(e.nativeEvent.layout.height);
           }}
         >
           {children}

@@ -18,6 +18,7 @@ import { BottomSheet } from '@/src/components/anim/BottomSheet';
 import { ItemDeslizavel } from '@/src/components/anim/ItemDeslizavel';
 import { Skeleton } from '@/src/components/anim/Skeleton';
 import { Tocavel } from '@/src/components/anim/Tocavel';
+import { FormAnexo } from '@/src/components/medico/FormAnexo';
 import { FormExame } from '@/src/components/medico/FormExame';
 import { Button } from '@/src/components/ui/Button';
 import { Cabecalho } from '@/src/components/ui/Cabecalho';
@@ -50,6 +51,7 @@ export default function DetalheExame() {
   const eMedico = useSessaoStore((s) => !!s.medico);
 
   const [editar, setEditar] = useState(false);
+  const [anexar, setAnexar] = useState(false);
   const [aCancelar, setACancelar] = useState(false);
   const [imagemAberta, setImagemAberta] = useState<AnexoExame | null>(null);
   const [cabecalhos, setCabecalhos] = useState<Record<string, string>>({});
@@ -246,6 +248,7 @@ export default function DetalheExame() {
         {podeEditar ? (
           <View style={styles.acoes}>
             <Button titulo="Editar / lançar resultados" icone="pencil-outline" onPress={() => setEditar(true)} />
+            <Button titulo="Anexar foto ou PDF" icone="paperclip" variante="secundario" onPress={() => setAnexar(true)} />
             <Button
               titulo="Cancelar exame"
               variante="perigoContorno"
@@ -264,6 +267,17 @@ export default function DetalheExame() {
             exame.setDados(novo);
             setEditar(false);
             toast.sucesso('Exame atualizado');
+          }}
+        />
+      </BottomSheet>
+
+      <BottomSheet visivel={anexar} aoFechar={() => setAnexar(false)} titulo="Anexar ao exame">
+        <FormAnexo
+          exameId={e.id}
+          aoAnexar={(novo) => {
+            anexos.setDados((lista) => [...(lista ?? []), novo]);
+            setAnexar(false);
+            toast.sucesso('Anexo enviado');
           }}
         />
       </BottomSheet>

@@ -21,11 +21,11 @@ export function Skeleton({ largura = '100%', altura = 14, raio = 6, style }: Ske
   const opacidade = useSharedValue(0.45);
 
   useEffect(() => {
-    opacidade.value = withRepeat(
+    opacidade.set(withRepeat(
       withTiming(1, { duration: 750, easing: Easing.inOut(Easing.ease) }),
       -1,
       true
-    );
+    ));
   }, [opacidade]);
 
   const estilo = useAnimatedStyle(() => ({ opacity: opacidade.value }));

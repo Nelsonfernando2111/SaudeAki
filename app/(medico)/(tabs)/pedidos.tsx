@@ -1,112 +1,133 @@
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { AbasPilula } from '@/src/components/ui/AbasPilula';
+import { IconeRotativo } from '@/src/components/anim/IconeRotativo';
+import { SkeletonLista } from '@/src/components/anim/Skeleton';
 import { CartaoPedido } from '@/src/components/shared/CartaoPedido';
-import { listarPedidosMedico } from '@/src/services/pedido.service';
-import { useSessaoStore } from '@/src/store/sessao.store';
+import { AbasPilula } from '@/src/components/ui/AbasPilula';
+import { Cabecalho } from '@/src/components/ui/Cabecalho';
+import { Estado } from '@/src/components/ui/Estado';
+import { useRecurso } from '@/src/hooks/useRecurso';
+import { paraErroApi } from '@/src/services/api';
+import { listarPedidos } from '@/src/services/pedido.service';
+import { toast } from '@/src/store/toast.store';
 import { estadoEfetivo } from '@/src/utils/pedidos';
 import type { PedidoAcesso } from '@/src/types';
-import { colors, fontFamily, spacing } from '@/src/theme';
+import { colors, spacing } from '@/src/theme';
 
-type Filtro = 'todos' | 'pendentes' | 'aprovados';
+type Filtro = 'todos' | 'pendentes' | 'aprovados' | 'recusados';
 
 const FILTROS: { chave: Filtro; titulo: string }[] = [
   { chave: 'todos', titulo: 'Todos' },
   { chave: 'pendentes', titulo: 'Pendentes' },
   { chave: 'aprovados', titulo: 'Aprovados' },
+  { chave: 'recusados', titulo: 'Recusados' },
 ];
 
+const TAMANHO_PAGINA = 20;
+
 export default function Pedidos() {
-  const insets = useSafeAreaInsets();
-  const medico = useSessaoStore((s) => s.medico);
-  const [pedidos, setPedidos] = useState<PedidoAcesso[]>([]);
-  const [carregando, setCarregando] = useState(true);
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [extra, setExtra] = useState<PedidoAcesso[]>([]);
+  const [pagina, setPagina] = useState(0);
+  const [aCarregarMais, setACarregarMais] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelado = false;
-      async function carregar() {
-        if (!medico) return;
-        const dados = await listarPedidosMedico(medico.id);
-        if (cancelado) return;
-        setPedidos(dados);
-        setCarregando(false);
-      }
-      carregar();
-      return () => {
-        cancelado = true;
-      };
-    }, [medico])
-  );
+  // O filtro `estado` da API só funciona para pacientes: o médico filtra localmente
+  const primeira = useRecurso(() => listarPedidos({ page: 0, size: TAMANHO_PAGINA }), [], {
+    aoFocar: true,
+  });
 
-  const visiveis = pedidos.filter((p) => {
-    const estado = estadoEfetivo(p);
-    if (filtro === 'pendentes') return estado === 'pendente';
-    if (filtro === 'aprovados') return estado === 'aprovado';
+  const todos = [...(primeira.dados?.content ?? []), ...extra];
+  const visiveis = todos.filter((p) => {
+    const e = estadoEfetivo(p);
+    if (filtro === 'pendentes') return e === 'PENDENTE';
+    if (filtro === 'aprovados') return e === 'APROVADO';
+    if (filtro === 'recusados') return e === 'RECUSADO' || e === 'EXPIRADO';
     return true;
   });
 
+  function atualizar() {
+    setExtra([]);
+    setPagina(0);
+    primeira.atualizar();
+  }
+
+  async function carregarMais() {
+    const total = primeira.dados?.totalPages ?? 1;
+    if (aCarregarMais || primeira.carregando || pagina + 1 >= total) return;
+    setACarregarMais(true);
+    try {
+      const seguinte = await listarPedidos({ page: pagina + 1, size: TAMANHO_PAGINA });
+      setExtra((e) => [...e, ...seguinte.content]);
+      setPagina(seguinte.number);
+    } catch (e) {
+      toast.erro(paraErroApi(e).message);
+    } finally {
+      setACarregarMais(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
-      <View style={[styles.cabecalho, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.cabecalhoTitulo}>Pedidos</Text>
-      </View>
+      <Cabecalho titulo="Pedidos" direita={<IconeRotativo ativo={primeira.aAtualizar} tamanho={20} />} />
 
       <View style={styles.filtros}>
         <AbasPilula abas={FILTROS} ativa={filtro} onMudar={setFiltro} />
       </View>
 
-      {carregando ? (
-        <View style={styles.centro}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={visiveis}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <CartaoPedido pedido={item} />}
-          contentContainerStyle={styles.lista}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.vazio}>
-              <MaterialCommunityIcons name="clipboard-text-outline" size={44} color={colors.border} />
-              <Text style={styles.vazioTitulo}>Nenhum pedido</Text>
-              <Text style={styles.vazioTexto}>
-                {filtro === 'todos'
+      <FlatList
+        data={primeira.carregando ? [] : visiveis}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(280)}>
+            <CartaoPedido pedido={item} />
+          </Animated.View>
+        )}
+        contentContainerStyle={styles.lista}
+        showsVerticalScrollIndicator={false}
+        onEndReached={carregarMais}
+        onEndReachedThreshold={0.4}
+        refreshControl={
+          <RefreshControl
+            refreshing={primeira.aAtualizar}
+            onRefresh={atualizar}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          primeira.carregando ? (
+            <SkeletonLista itens={5} />
+          ) : primeira.erro ? (
+            <Estado
+              icone="cloud-alert-outline"
+              titulo="Não foi possível carregar"
+              texto={primeira.erro.message}
+              acao={{ titulo: 'Tentar de novo', onPress: atualizar }}
+            />
+          ) : (
+            <Estado
+              icone="clipboard-text-outline"
+              titulo="Nenhum pedido"
+              texto={
+                filtro === 'todos'
                   ? 'Os pedidos de acesso que enviar aparecem aqui.'
-                  : 'Não há pedidos neste filtro.'}
-              </Text>
-            </View>
-          }
-        />
-      )}
+                  : 'Não há pedidos neste filtro.'
+              }
+            />
+          )
+        }
+        ListFooterComponent={
+          aCarregarMais ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} /> : null
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  centro: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  cabecalho: {
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
-    paddingBottom: spacing.lg,
-  },
-  cabecalhoTitulo: { fontFamily: fontFamily.semibold, fontSize: 18, color: colors.white },
   filtros: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg },
   lista: { padding: spacing.xl, gap: spacing.md, flexGrow: 1 },
-  vazio: { alignItems: 'center', marginTop: 60, gap: spacing.sm, paddingHorizontal: spacing.xl },
-  vazioTitulo: { fontFamily: fontFamily.semibold, fontSize: 16, color: colors.text },
-  vazioTexto: {
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
 });

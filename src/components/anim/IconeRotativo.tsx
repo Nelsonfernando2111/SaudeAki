@@ -30,11 +30,11 @@ export function IconeRotativo({
 
   useEffect(() => {
     if (ativo) {
-      rotacao.value = 0;
-      rotacao.value = withRepeat(withTiming(360, { duration: duracao, easing: Easing.linear }), -1);
+      rotacao.set(0);
+      rotacao.set(withRepeat(withTiming(360, { duration: duracao, easing: Easing.linear }), -1));
     } else {
       cancelAnimation(rotacao);
-      rotacao.value = withTiming(0, { duration: 200 });
+      rotacao.set(withTiming(0, { duration: 200 }));
     }
   }, [ativo, duracao, rotacao]);
 

@@ -3,6 +3,9 @@ import type { AnexoExame, DadosExame, Exame } from '@/src/types';
 
 /* Secção 7 da API: exames e anexos */
 
+export const TAMANHO_MAXIMO_ANEXO = 5 * 1024 * 1024;
+export const TIPOS_ANEXO = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
 export async function registarExame(pacienteId: string, dados: DadosExame): Promise<Exame> {
   const { data } = await api.post<Exame>(
     `/pacientes/${encodeURIComponent(pacienteId)}/exames`,
@@ -38,12 +41,19 @@ export async function listarAnexos(exameId: number | string): Promise<AnexoExame
 export async function anexarArquivo(
   exameId: number,
   arquivo: { uri: string; nome: string; tipo: string },
-  descricao?: string
+  descricao?: string,
+  aoProgresso?: (fracao: number) => void
 ): Promise<AnexoExame> {
   const corpo = new FormData();
+  // No React Native, um ficheiro em FormData é { uri, name, type }
   corpo.append('arquivo', { uri: arquivo.uri, name: arquivo.nome, type: arquivo.tipo } as any);
   if (descricao) corpo.append('descricao', descricao);
-  const { data } = await api.post<AnexoExame>(`/exames/${exameId}/fotos`, corpo);
+  const { data } = await api.post<AnexoExame>(`/exames/${exameId}/fotos`, corpo, {
+    timeout: 120000,
+    onUploadProgress: (e) => {
+      if (e.total) aoProgresso?.(e.loaded / e.total);
+    },
+  });
   return data;
 }
 

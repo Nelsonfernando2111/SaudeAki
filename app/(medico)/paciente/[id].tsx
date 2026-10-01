@@ -1,228 +1,206 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { AbasPilula } from '@/src/components/ui/AbasPilula';
+import { Expansivel } from '@/src/components/anim/Expansivel';
+import { Skeleton, SkeletonLista } from '@/src/components/anim/Skeleton';
+import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
-import { obterPaciente } from '@/src/services/paciente.service';
-import { solicitarAcesso } from '@/src/services/pedido.service';
-import { useSessaoStore } from '@/src/store/sessao.store';
-import type { Paciente } from '@/src/types';
+import { Cabecalho } from '@/src/components/ui/Cabecalho';
+import { Estado } from '@/src/components/ui/Estado';
+import { Etiqueta } from '@/src/components/ui/Etiqueta';
+import { useRecurso } from '@/src/hooks/useRecurso';
+import { useVoltar } from '@/src/hooks/useVoltar';
+import { paraErroApi } from '@/src/services/api';
+import { obterFichaEmergencia } from '@/src/services/paciente.service';
+import { listarPedidos, solicitarAcesso } from '@/src/services/pedido.service';
+import { toast } from '@/src/store/toast.store';
+import { INFO_SEVERIDADE, posologia, tipoSanguineo } from '@/src/utils/clinico';
+import { sessaoProvavelmenteAtiva } from '@/src/utils/pedidos';
+import type { CondicaoMedica } from '@/src/types';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-type Aba = 'resumo' | 'historico' | 'prescricoes';
-
-const ABAS: { chave: Aba; titulo: string }[] = [
-  { chave: 'resumo', titulo: 'Resumo' },
-  { chave: 'historico', titulo: 'Histórico' },
-  { chave: 'prescricoes', titulo: 'Prescrições' },
-];
-
-function LinhaResumo({
-  icone,
-  cor,
-  fundo,
-  titulo,
-  valor,
-}: {
-  icone: IconName;
-  cor: string;
-  fundo: string;
-  titulo: string;
-  valor: string;
-}) {
+function ListaCondicoes({ itens, vazio }: { itens: CondicaoMedica[]; vazio: string }) {
+  if (itens.length === 0) return <Text style={styles.vazio}>{vazio}</Text>;
   return (
-    <View style={styles.linha}>
-      <View style={[styles.linhaIcone, { backgroundColor: fundo }]}>
-        <MaterialCommunityIcons name={icone} size={22} color={cor} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.linhaTitulo}>{titulo}</Text>
-        <Text style={styles.linhaValor}>{valor}</Text>
-      </View>
+    <View style={{ paddingBottom: spacing.sm }}>
+      {itens.map((c) => {
+        const sev = INFO_SEVERIDADE[c.severidade];
+        return (
+          <View key={c.id} style={styles.item}>
+            <Text style={styles.itemTexto}>{c.descricao}</Text>
+            <Etiqueta texto={sev.label} cor={sev.cor} fundo={sev.fundo} />
+          </View>
+        );
+      })}
     </View>
   );
 }
 
-export default function DadosPaciente() {
+export default function FichaPaciente() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const medico = useSessaoStore((s) => s.medico);
-
-  const [paciente, setPaciente] = useState<Paciente | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [aba, setAba] = useState<Aba>('resumo');
   const [aSolicitar, setASolicitar] = useState(false);
+  const voltar = useVoltar();
 
-  useEffect(() => {
-    let cancelado = false;
-    async function carregar() {
-      if (!id) return;
-      const dados = await obterPaciente(id);
-      if (cancelado) return;
-      setPaciente(dados);
-      setCarregando(false);
-    }
-    carregar();
-    return () => {
-      cancelado = true;
-    };
-  }, [id]);
+  const ficha = useRecurso(() => obterFichaEmergencia(id), [id]);
+  // Há um pedido aprovado há menos de 30 min para este paciente?
+  const pedidos = useRecurso(() => listarPedidos({ size: 30 }).then((p) => p.content), [], { aoFocar: true });
+
+  const f = ficha.dados;
+  const sessaoAtiva = (pedidos.dados ?? []).find(
+    (p) => sessaoProvavelmenteAtiva(p) && (p.pacienteId === id || p.pacienteNome === f?.nomeCompleto)
+  );
 
   async function pedirAcesso() {
-    if (!paciente || !medico) return;
+    if (!f) return;
     setASolicitar(true);
     try {
-      const pedido = await solicitarAcesso(medico, paciente);
+      const pedido = await solicitarAcesso(f.codUnicoPaciente);
       router.push({
         pathname: '/(medico)/aguardando-aprovacao',
-        params: { id: pedido.id },
+        params: {
+          id: String(pedido.id),
+          pacienteId: pedido.pacienteId,
+          pacienteNome: pedido.pacienteNome,
+          dataExpiracao: pedido.dataExpiracao,
+        },
       } as any);
+    } catch (e) {
+      toast.erro(paraErroApi(e).message);
     } finally {
       setASolicitar(false);
     }
   }
 
-  const cabecalhoBarra = (titulo: string) => (
-    <View style={[styles.barra, { paddingTop: insets.top + spacing.md }]}>
-      <Pressable onPress={() => router.back()} hitSlop={12}>
-        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.white} />
-      </Pressable>
-      <Text style={styles.barraTitulo}>{titulo}</Text>
-      <View style={{ width: 24 }} />
-    </View>
-  );
-
-  if (carregando) {
+  if (ficha.carregando) {
     return (
       <View style={styles.container}>
-        {cabecalhoBarra('Dados do Paciente')}
-        <View style={styles.centro}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <Cabecalho titulo="Ficha de Emergência" voltar />
+        <View style={styles.scroll}>
+          <View style={styles.identificacao}>
+            <Skeleton largura={68} altura={68} raio={34} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <Skeleton largura="70%" altura={18} />
+              <Skeleton largura="40%" altura={12} />
+            </View>
+          </View>
+          <SkeletonLista itens={3} />
         </View>
       </View>
     );
   }
 
-  if (!paciente) {
+  if (!f) {
+    const naoExiste = ficha.erro?.status === 404;
     return (
       <View style={styles.container}>
-        {cabecalhoBarra('Dados do Paciente')}
-        <View style={styles.centro}>
-          <Text style={styles.vazioTexto}>Paciente não encontrado.</Text>
-        </View>
+        <Cabecalho titulo="Ficha de Emergência" voltar />
+        <Estado
+          icone={naoExiste ? 'account-question-outline' : 'cloud-alert-outline'}
+          titulo={naoExiste ? 'Paciente não encontrado' : 'Não foi possível carregar a ficha'}
+          texto={naoExiste ? `Não existe nenhum paciente com o código ${id}.` : ficha.erro?.message}
+          acao={{ titulo: naoExiste ? 'Voltar' : 'Tentar de novo', onPress: naoExiste ? voltar : ficha.atualizar }}
+        />
       </View>
     );
   }
-
-  const lista = (nomes: string[], vazio: string) => (nomes.length ? nomes.join(', ') : vazio);
 
   return (
     <View style={styles.container}>
-      {cabecalhoBarra('Dados do Paciente')}
+      <Cabecalho titulo="Ficha de Emergência" voltar />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Identificação */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={ficha.aAtualizar}
+            onRefresh={() => {
+              ficha.atualizar();
+              pedidos.recarregar();
+            }}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
         <View style={styles.identificacao}>
-          <View style={styles.avatar}>
-            <MaterialCommunityIcons name="account" size={40} color={colors.primary} />
-          </View>
+          <Avatar nome={f.nomeCompleto} tamanho={68} tagTransicao={`paciente-${id}`} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.nome}>{paciente.nome}</Text>
-            <Text style={styles.codigo}>{paciente.codigo}</Text>
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: paciente.ativo ? colors.successSoft : colors.errorSoft },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="check-circle-outline"
-                size={13}
-                color={paciente.ativo ? colors.success : colors.error}
-              />
-              <Text
-                style={[
-                  styles.badgeTexto,
-                  { color: paciente.ativo ? colors.success : colors.error },
-                ]}
-              >
-                {paciente.ativo ? 'Ativo' : 'Inativo'}
-              </Text>
-            </View>
+            <Text style={styles.nome}>{f.nomeCompleto}</Text>
+            <Text style={styles.codigo}>{f.codUnicoPaciente}</Text>
           </View>
         </View>
 
-        <AbasPilula abas={ABAS} ativa={aba} onMudar={setAba} />
+        <Animated.View entering={FadeInDown.duration(300)} style={styles.aviso}>
+          <MaterialCommunityIcons name="alert-decagram-outline" size={20} color={colors.primary} />
+          <Text style={styles.avisoTexto}>
+            Acesso de emergência: não precisa de aprovação, mas fica registado no histórico do paciente.
+          </Text>
+        </Animated.View>
 
-        <View style={styles.conteudo}>
-          {aba === 'resumo' ? (
-            <View style={styles.cartao}>
-              <LinhaResumo
-                icone="water-outline"
-                cor={colors.error}
-                fundo={colors.errorSoft}
-                titulo="Tipo sanguíneo"
-                valor={paciente.tipoSanguineo}
-              />
-              <LinhaResumo
-                icone="flower-pollen-outline"
-                cor={colors.error}
-                fundo={colors.errorSoft}
-                titulo="Alergias"
-                valor={lista(
-                  paciente.alergias.map((a) => a.nome),
-                  'Nenhuma registada'
-                )}
-              />
-              <LinhaResumo
-                icone="heart-pulse"
-                cor={colors.primary}
-                fundo={colors.primarySoft}
-                titulo="Condições crónicas"
-                valor={lista(
-                  paciente.condicoesCronicas.map((c) => c.nome),
-                  'Nenhuma registada'
-                )}
-              />
-              <LinhaResumo
-                icone="pill"
-                cor={colors.success}
-                fundo={colors.successSoft}
-                titulo="Medicação ativa"
-                valor={lista(
-                  paciente.medicacaoAtiva.map((m) => m.nome),
-                  'Nenhuma registada'
-                )}
-              />
-            </View>
-          ) : (
-            <View style={styles.bloqueado}>
-              <View style={styles.bloqueadoIcone}>
-                <MaterialCommunityIcons name="lock-outline" size={32} color={colors.primary} />
+        <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.sangue}>
+          <MaterialCommunityIcons name="water" size={26} color={colors.error} />
+          <Text style={styles.sangueLabel}>Tipo sanguíneo</Text>
+          <Text style={styles.sangueValor}>
+            {tipoSanguineo(f.tipoSanguineo?.grupoSanguineo, f.tipoSanguineo?.fatorRh)}
+          </Text>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.grupo}>
+          <Expansivel titulo={`Alergias (${f.alergias.length})`} inicialAberto>
+            <ListaCondicoes itens={f.alergias} vazio="Nenhuma alergia registada" />
+          </Expansivel>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(180).duration(300)} style={styles.grupo}>
+          <Expansivel titulo={`Condições crónicas (${f.condicoesCronicas.length})`} inicialAberto>
+            <ListaCondicoes itens={f.condicoesCronicas} vazio="Nenhuma condição registada" />
+          </Expansivel>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(240).duration(300)} style={styles.grupo}>
+          <Expansivel titulo={`Medicação ativa (${f.medicacaoAtiva.length})`} inicialAberto>
+            {f.medicacaoAtiva.length === 0 ? (
+              <Text style={styles.vazio}>Sem medicação ativa</Text>
+            ) : (
+              <View style={{ paddingBottom: spacing.sm }}>
+                {f.medicacaoAtiva.map((m) => (
+                  <View key={m.id} style={styles.item}>
+                    <MaterialCommunityIcons name="pill" size={18} color={colors.purple} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemTexto}>{m.nomeMedicamento}</Text>
+                      <Text style={styles.itemSub}>{posologia(m)}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
-              <Text style={styles.bloqueadoTitulo}>Acesso restrito</Text>
-              <Text style={styles.vazioTexto}>
-                Para ver {aba === 'historico' ? 'o histórico clínico' : 'as prescrições'} completo, o
-                paciente precisa de aprovar o seu pedido de acesso.
-              </Text>
-            </View>
-          )}
-        </View>
+            )}
+          </Expansivel>
+        </Animated.View>
       </ScrollView>
 
-      {/* Ação fixa no fundo */}
       <View style={[styles.rodape, { paddingBottom: insets.bottom + spacing.lg }]}>
-        <Button
-          titulo="Solicitar acesso completo"
-          onPress={pedirAcesso}
-          carregando={aSolicitar}
-          desativado={!medico}
-        />
+        {sessaoAtiva ? (
+          <Button
+            titulo="Abrir histórico completo"
+            icone="lock-open-outline"
+            variante="sucesso"
+            onPress={() => router.push(`/(medico)/historico/${sessaoAtiva.pacienteId}` as any)}
+          />
+        ) : (
+          <Button
+            titulo="Solicitar acesso completo"
+            icone="shield-key-outline"
+            onPress={pedirAcesso}
+            carregando={aSolicitar}
+          />
+        )}
       </View>
     </View>
   );
@@ -230,101 +208,50 @@ export default function DadosPaciente() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  centro: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  barra: {
-    backgroundColor: colors.primaryDark,
+  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.md },
+  identificacao: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.sm },
+  nome: { fontFamily: fontFamily.semibold, fontSize: 18, color: colors.primaryDark },
+  codigo: { fontFamily: fontFamily.medium, fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  aviso: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    backgroundColor: colors.primaryFaint,
+    borderRadius: radius.lg,
+    padding: spacing.md,
   },
-  barraTitulo: { fontFamily: fontFamily.semibold, fontSize: 18, color: colors.white },
-  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-
-  identificacao: {
+  avisoTexto: { flex: 1, fontFamily: fontFamily.regular, fontSize: 12, color: colors.primaryDark, lineHeight: 17 },
+  sangue: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
-    marginBottom: spacing.xl,
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.errorSoft,
+    padding: spacing.lg,
   },
-  avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nome: { fontFamily: fontFamily.semibold, fontSize: 18, color: colors.text },
-  codigo: {
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-    marginTop: spacing.sm,
-  },
-  badgeTexto: { fontFamily: fontFamily.medium, fontSize: 12 },
-
-  conteudo: { marginTop: spacing.lg },
-  cartao: {
+  sangueLabel: { flex: 1, fontFamily: fontFamily.medium, fontSize: 15, color: colors.text },
+  sangueValor: { fontFamily: fontFamily.bold, fontSize: 22, color: colors.error },
+  grupo: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
   },
-  linha: {
+  item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  linhaIcone: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  linhaTitulo: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary },
-  linhaValor: { fontFamily: fontFamily.semibold, fontSize: 15, color: colors.text, marginTop: 1 },
-
-  bloqueado: {
-    alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.xxl,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  bloqueadoIcone: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  bloqueadoTitulo: { fontFamily: fontFamily.semibold, fontSize: 16, color: colors.text },
-  vazioTexto: {
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-
+  itemTexto: { flex: 1, fontFamily: fontFamily.medium, fontSize: 14, color: colors.text },
+  itemSub: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  vazio: { fontFamily: fontFamily.regular, fontSize: 13, color: colors.textSecondary, paddingBottom: spacing.md },
   rodape: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useVoltar } from '@/src/hooks/useVoltar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -36,6 +37,7 @@ type Form = z.infer<typeof schema>;
 
 export default function LoginMedico() {
   const router = useRouter();
+  const voltar = useVoltar('/(auth)/escolher-perfil');
   const insets = useSafeAreaInsets();
   const definirMedico = useSessaoStore((s) => s.definirMedico);
   const [erroGeral, setErroGeral] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export default function LoginMedico() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.voltar}>
+        <Pressable onPress={voltar} hitSlop={12} style={styles.voltar}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={colors.primary} />
         </Pressable>
 

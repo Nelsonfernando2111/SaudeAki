@@ -1,22 +1,22 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useVoltar } from '@/src/hooks/useVoltar';
 import { colors, fontFamily, spacing } from '@/src/theme';
 
 interface CabecalhoProps {
   titulo: string;
-  /** true = router.back(); função = ação personalizada */
+  /** true = volta ao ecrã anterior (ou ao início); função = ação personalizada */
   voltar?: boolean | (() => void);
   direita?: React.ReactNode;
 }
 
 /** Cabeçalho branco com título e ícones azuis */
 export function Cabecalho({ titulo, voltar, direita }: CabecalhoProps) {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const aoVoltar = typeof voltar === 'function' ? voltar : () => router.back();
+  const voltarPadrao = useVoltar();
+  const aoVoltar = typeof voltar === 'function' ? voltar : voltarPadrao;
 
   return (
     <View style={[styles.cabecalho, { paddingTop: insets.top + spacing.md }]}>

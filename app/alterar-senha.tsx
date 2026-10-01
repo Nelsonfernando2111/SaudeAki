@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useVoltar } from '@/src/hooks/useVoltar';
 import Animated from 'react-native-reanimated';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -40,7 +40,7 @@ const CAMPOS: { nome: keyof Form; label: string }[] = [
 ];
 
 export default function AlterarSenha() {
-  const router = useRouter();
+  const voltar = useVoltar();
   const [erro, setErro] = useState<string | null>(null);
   const { estilo, tremer } = useTremor();
 
@@ -55,7 +55,7 @@ export default function AlterarSenha() {
       try {
         await alterarSenha(d.senhaAtual, d.novaSenha);
         toast.sucesso('Senha alterada. Os outros dispositivos terão de entrar de novo.');
-        router.back();
+        voltar();
       } catch (e) {
         const err = paraErroApi(e);
         setErro(err.status === 401 ? 'A senha atual está incorreta.' : err.message);

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useVoltar } from '@/src/hooks/useVoltar';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -79,6 +80,7 @@ const ABAS: { chave: Aba; titulo: string }[] = [
 
 export default function LoginPaciente() {
   const router = useRouter();
+  const voltar = useVoltar('/(auth)/escolher-perfil');
   const insets = useSafeAreaInsets();
   const definirPaciente = useSessaoStore((s) => s.definirPaciente);
   const { estilo, tremer } = useTremor();
@@ -226,7 +228,7 @@ export default function LoginPaciente() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.voltar}>
+        <Pressable onPress={voltar} hitSlop={12} style={styles.voltar}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={colors.primary} />
         </Pressable>
 

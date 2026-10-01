@@ -2,18 +2,14 @@ import { useEffect, useState } from 'react';
 
 /** Devolve os segundos que faltam até `expiraEm` (ISO). */
 export function useContagem(expiraEm?: string | null) {
-  const [segundos, setSegundos] = useState(0);
+  const [agora, setAgora] = useState(() => Date.now());
 
   useEffect(() => {
     if (!expiraEm) return;
-
-    const calcular = () =>
-      Math.max(0, Math.ceil((new Date(expiraEm).getTime() - Date.now()) / 1000));
-
-    setSegundos(calcular());
-    const timer = setInterval(() => setSegundos(calcular()), 500);
+    const timer = setInterval(() => setAgora(Date.now()), 500);
     return () => clearInterval(timer);
   }, [expiraEm]);
 
-  return segundos;
+  if (!expiraEm) return 0;
+  return Math.max(0, Math.ceil((new Date(expiraEm).getTime() - agora) / 1000));
 }

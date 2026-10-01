@@ -7,7 +7,7 @@ export function useTremor() {
 
   const tremer = useCallback(() => {
     const t = (v: number) => withTiming(v, { duration: 55 });
-    x.value = withSequence(t(-10), t(10), t(-8), t(8), t(-4), t(4), t(0));
+    x.set(withSequence(t(-10), t(10), t(-8), t(8), t(-4), t(4), t(0)));
   }, [x]);
 
   const estilo = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));

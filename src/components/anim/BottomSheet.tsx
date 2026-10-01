@@ -36,30 +36,37 @@ export function BottomSheet({ visivel, aoFechar, titulo, children }: BottomSheet
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [montado, setMontado] = useState(visivel);
+  const [visivelAnterior, setVisivelAnterior] = useState(visivel);
   const y = useSharedValue(height);
+
+  // Monta logo que fica visível; só desmonta no fim da animação de saída
+  if (visivel !== visivelAnterior) {
+    setVisivelAnterior(visivel);
+    if (visivel) setMontado(true);
+  }
 
   useEffect(() => {
     if (visivel) {
-      setMontado(true);
-      y.value = height;
-      y.value = withSpring(0, { damping: 22, stiffness: 220, mass: 0.9 });
-    } else if (montado) {
-      y.value = withTiming(height, { duration: 220, easing: Easing.in(Easing.quad) }, (fim) => {
-        if (fim) scheduleOnRN(setMontado, false);
-      });
+      y.set(height);
+      y.set(withSpring(0, { damping: 22, stiffness: 220, mass: 0.9 }));
+    } else {
+      y.set(
+        withTiming(height, { duration: 220, easing: Easing.in(Easing.quad) }, (fim) => {
+          if (fim) scheduleOnRN(setMontado, false);
+        })
+      );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visivel]);
+  }, [visivel, height, y]);
 
   const arrastar = Gesture.Pan()
     .onUpdate((e) => {
-      y.value = Math.max(0, e.translationY);
+      y.set(Math.max(0, e.translationY));
     })
     .onEnd((e) => {
       if (e.translationY > 120 || e.velocityY > 900) {
         scheduleOnRN(aoFechar);
       } else {
-        y.value = withSpring(0, { damping: 20, stiffness: 240 });
+        y.set(withSpring(0, { damping: 20, stiffness: 240 }));
       }
     });
 

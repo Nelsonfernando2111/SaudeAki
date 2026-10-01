@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
 import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { useContagem } from '@/src/hooks/useContagem';
+import { useVoltar } from '@/src/hooks/useVoltar';
 import { paraErroApi } from '@/src/services/api';
 import { aprovarPedido, listarPedidos, negarPedido } from '@/src/services/pedido.service';
 import { toast } from '@/src/store/toast.store';
@@ -60,7 +61,6 @@ const RESULTADOS: Record<
 };
 
 export default function PedidoAcessoTela() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<Partial<DadosPedido>>();
 
@@ -75,7 +75,7 @@ export default function PedidoAcessoTela() {
       : null
   );
   const [aEnviar, setAEnviar] = useState<'aprovar' | 'negar' | null>(null);
-  const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [resposta, setResultado] = useState<Resultado | null>(null);
 
   const segundos = useContagem(pedido?.dataExpiracao);
 
@@ -100,10 +100,8 @@ export default function PedidoAcessoTela() {
   }, [pedido, params.id]);
 
   // Quando o tempo acaba sem resposta
-  useEffect(() => {
-    if (!pedido || resultado || aEnviar) return;
-    if (Date.now() >= new Date(pedido.dataExpiracao).getTime()) setResultado('EXPIRADO');
-  }, [segundos, pedido, resultado, aEnviar]);
+  const resultado: Resultado | null =
+    resposta ?? (pedido && !aEnviar && segundos === 0 ? 'EXPIRADO' : null);
 
   async function responder(acao: 'aprovar' | 'negar') {
     if (!pedido) return;
@@ -121,10 +119,7 @@ export default function PedidoAcessoTela() {
     }
   }
 
-  function fechar() {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(paciente)/(tabs)' as any);
-  }
+  const fechar = useVoltar('/(paciente)/(tabs)');
 
   const nomeMedico = pedido?.medicoNome ?? 'O médico';
 

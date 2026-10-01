@@ -1,304 +1,229 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { IconeRotativo } from '@/src/components/anim/IconeRotativo';
+import { PulsoSucesso } from '@/src/components/anim/PulsoSucesso';
+import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
 import { useContagem } from '@/src/hooks/useContagem';
-import { cancelarPedido, obterPedido, responderPedido } from '@/src/services/pedido.service';
-import type { PedidoAcesso } from '@/src/types';
+import { useTopico } from '@/src/hooks/useTopico';
+import { obterEstadoPedido } from '@/src/services/pedido.service';
+import { topicos } from '@/src/services/realtime';
+import { useSessaoStore } from '@/src/store/sessao.store';
+import { formatarContagem } from '@/src/utils/datas';
+import type { EstadoPedido, PedidoAcessoResumo } from '@/src/types';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-type Resultado = 'negado' | 'expirado' | 'cancelado';
+const INTERVALO_MS = 3000;
 
-const INTERVALO_MS = 2000;
-
-function LinhaDados({ icone, label, valor }: { icone: IconName; label: string; valor: string }) {
-  return (
-    <View style={styles.linhaDados}>
-      <MaterialCommunityIcons name={icone} size={20} color={colors.textSecondary} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.linhaLabel}>{label}</Text>
-        <Text style={styles.linhaValor}>{valor}</Text>
-      </View>
-    </View>
-  );
+/** Ondas a expandir à volta do relógio enquanto se espera */
+function Onda({ atraso }: { atraso: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      p.set(withRepeat(withTiming(1, { duration: 2000, easing: Easing.out(Easing.quad) }), -1));
+    }, atraso);
+    return () => clearTimeout(t);
+  }, [atraso, p]);
+  const estilo = useAnimatedStyle(() => ({ opacity: 0.5 * (1 - p.value), transform: [{ scale: 1 + p.value * 0.9 }] }));
+  return <Animated.View style={[styles.onda, estilo]} />;
 }
-
-const doisDigitos = (n: number) => String(n).padStart(2, '0');
 
 export default function AguardandoAprovacao() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const medico = useSessaoStore((s) => s.medico);
+  const { id, pacienteId, pacienteNome, dataExpiracao } = useLocalSearchParams<{
+    id: string;
+    pacienteId: string;
+    pacienteNome: string;
+    dataExpiracao: string;
+  }>();
 
-  const [pedido, setPedido] = useState<PedidoAcesso | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [resultado, setResultado] = useState<Resultado | null>(null);
-  const [aCancelar, setACancelar] = useState(false);
+  const [estado, setEstado] = useState<EstadoPedido>('PENDENTE');
+  const segundos = useContagem(dataExpiracao);
+  const terminado = useRef(false);
 
-  const segundos = useContagem(pedido?.expiraEm);
+  const aplicar = useCallback(
+    (novo: EstadoPedido) => {
+      if (terminado.current || novo === 'PENDENTE') return;
+      terminado.current = true;
+      setEstado(novo);
+      if (novo === 'APROVADO') {
+        setTimeout(() => router.replace(`/(medico)/historico/${pacienteId}` as any), 1300);
+      }
+    },
+    [router, pacienteId]
+  );
 
-  function irParaHistorico(pacienteId: string) {
-    router.replace(`/(medico)/historico/${pacienteId}` as any);
-  }
+  // Tempo real: /topic/medico/{medicoId}/pedidos
+  useTopico<PedidoAcessoResumo>(medico ? topicos.pedidosDoMedico(medico.id) : null, (m) => {
+    if (String(m?.id) === id) aplicar(m.estado);
+  });
 
-  function aplicarEstado(dados: PedidoAcesso) {
-    setPedido(dados);
-    if (dados.estado === 'aprovado') irParaHistorico(dados.paciente.id);
-    else if (dados.estado === 'negado') setResultado('negado');
-    else if (dados.estado === 'cancelado') setResultado('cancelado');
-    else if (dados.estado === 'expirado') setResultado('expirado');
-  }
-
-  // Consulta o estado do pedido de 2 em 2 segundos
+  // Fallback: GET /pedidos-acesso/{id}/estado
   useEffect(() => {
-    if (!id || resultado) return;
-    let cancelado = false;
+    if (!id) return;
+    let ativo = true;
     let timer: ReturnType<typeof setTimeout>;
-
     async function verificar() {
-      const dados = await obterPedido(id);
-      if (cancelado) return;
-      if (dados) aplicarEstado(dados);
-      setCarregando(false);
-      timer = setTimeout(verificar, INTERVALO_MS);
+      try {
+        const e = await obterEstadoPedido(id);
+        if (!ativo) return;
+        aplicar(e);
+      } catch {
+        // tenta de novo no próximo ciclo
+      }
+      if (ativo && !terminado.current) timer = setTimeout(verificar, INTERVALO_MS);
     }
-
     verificar();
     return () => {
-      cancelado = true;
+      ativo = false;
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, resultado]);
+  }, [id, aplicar]);
 
-  // Tempo esgotado (confirma com a hora real para evitar falsos positivos)
+  // O servidor marca EXPIRADO; localmente assume-se ao chegar a 0
   useEffect(() => {
-    if (!pedido || resultado || pedido.estado !== 'pendente') return;
-    if (Date.now() >= new Date(pedido.expiraEm).getTime()) {
-      setResultado('expirado');
+    if (dataExpiracao && segundos === 0 && Date.now() >= new Date(dataExpiracao).getTime() + 1500) {
+      aplicar('EXPIRADO');
     }
-  }, [segundos, pedido, resultado]);
+  }, [segundos, dataExpiracao, aplicar]);
 
-  function confirmarCancelamento() {
-    Alert.alert('Cancelar pedido', 'Deseja cancelar o pedido de acesso?', [
-      { text: 'Não', style: 'cancel' },
-      {
-        text: 'Sim, cancelar',
-        style: 'destructive',
-        onPress: async () => {
-          if (!pedido) return;
-          setACancelar(true);
-          await cancelarPedido(pedido.id);
-          setACancelar(false);
-          setResultado('cancelado');
-        },
-      },
-    ]);
-  }
+  const voltarFicha = () => router.replace(`/(medico)/paciente/${pacienteId}` as any);
 
-  async function simularResposta(estado: 'aprovado' | 'negado') {
-    if (!pedido) return;
-    await responderPedido(pedido.id, estado);
-    const dados = await obterPedido(pedido.id);
-    if (dados) aplicarEstado(dados);
-  }
-
-  function fechar() {
-    router.replace('/(medico)/(tabs)/pacientes' as any);
-  }
-
-  if (carregando || !pedido) {
-    return (
-      <View style={[styles.container, styles.centro]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  /* ---------- Estados finais ---------- */
-  if (resultado) {
-    const config = {
-      negado: {
-        icone: 'close' as IconName,
-        cor: colors.error,
-        fundo: colors.errorSoft,
-        titulo: 'Acesso negado',
-        texto: 'O paciente não autorizou o acesso ao histórico clínico.',
-      },
-      expirado: {
-        icone: 'clock-alert-outline' as IconName,
-        cor: colors.warning,
-        fundo: colors.warningSoft,
-        titulo: 'Pedido expirado',
-        texto: 'O paciente não respondeu a tempo. Pode enviar um novo pedido.',
-      },
-      cancelado: {
-        icone: 'cancel' as IconName,
-        cor: colors.textSecondary,
-        fundo: colors.border,
-        titulo: 'Pedido cancelado',
-        texto: 'O pedido de acesso foi cancelado.',
-      },
-    }[resultado];
+  /* ---------- Resposta ---------- */
+  if (estado !== 'PENDENTE') {
+    const cfg = {
+      APROVADO: { icone: 'check', cor: colors.success, fundo: colors.successSoft, titulo: 'Acesso aprovado', texto: 'A abrir o histórico clínico completo…' },
+      RECUSADO: { icone: 'close', cor: colors.error, fundo: colors.errorSoft, titulo: 'Acesso recusado', texto: 'O paciente não autorizou o acesso ao histórico completo.' },
+      EXPIRADO: { icone: 'clock-alert-outline', cor: colors.warningText, fundo: colors.warningSoft, titulo: 'Pedido expirado', texto: 'O paciente não respondeu em 60 segundos. Pode enviar um novo pedido.' },
+    }[estado] as { icone: any; cor: string; fundo: string; titulo: string; texto: string };
 
     return (
       <View style={[styles.container, styles.centro, { padding: spacing.xl }]}>
-        <View style={[styles.iconeGrande, { backgroundColor: config.fundo }]}>
-          <MaterialCommunityIcons name={config.icone} size={44} color={config.cor} />
-        </View>
-        <Text style={styles.titulo}>{config.titulo}</Text>
-        <Text style={styles.texto}>{config.texto}</Text>
-        <View style={{ alignSelf: 'stretch', marginTop: spacing.xl }}>
-          <Button titulo="Voltar à pesquisa" onPress={fechar} />
-        </View>
+        <PulsoSucesso icone={cfg.icone} cor={cfg.cor} fundo={cfg.fundo} />
+        <Animated.Text entering={FadeInDown.delay(150)} style={styles.titulo}>
+          {cfg.titulo}
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(220)} style={styles.texto}>
+          {cfg.texto}
+        </Animated.Text>
+        {estado !== 'APROVADO' ? (
+          <Animated.View entering={FadeIn.delay(300)} style={styles.acoes}>
+            <Button titulo="Voltar à ficha do paciente" onPress={voltarFicha} />
+          </Animated.View>
+        ) : null}
       </View>
     );
   }
 
   /* ---------- A aguardar ---------- */
   const urgente = segundos <= 10;
-  const tempo = `${doisDigitos(Math.floor(segundos / 60))}:${doisDigitos(segundos % 60)}`;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xl }]}>
       <View style={styles.conteudo}>
-        <View style={[styles.iconeGrande, { backgroundColor: colors.primarySoft }]}>
-          <MaterialCommunityIcons name="clock-outline" size={48} color={colors.primary} />
+        <View style={styles.relogio}>
+          <Onda atraso={0} />
+          <Onda atraso={1000} />
+          <View style={styles.relogioCentro}>
+            <MaterialCommunityIcons name="clock-outline" size={46} color={colors.primary} />
+          </View>
         </View>
+
         <Text style={styles.titulo}>Aguardando aprovação</Text>
         <Text style={styles.texto}>
-          O pedido de acesso completo foi enviado ao paciente. Iremos notificar assim que houver uma
-          resposta.
+          O pedido foi enviado ao telemóvel do paciente. Esta página atualiza sozinha quando houver resposta.
         </Text>
 
         <View style={styles.cartao}>
-          <LinhaDados icone="account-outline" label="Paciente" valor={pedido.paciente.nome} />
-          <LinhaDados icone="stethoscope" label="Médico" valor={pedido.medico.nome} />
-          <LinhaDados
-            icone="hospital-building"
-            label="Unidade sanitária"
-            valor={pedido.medico.unidadeSanitaria}
-          />
+          <Avatar nome={pacienteNome} tagTransicao={`paciente-${pacienteId}`} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cartaoLabel}>Paciente</Text>
+            <Text style={styles.cartaoValor}>{pacienteNome}</Text>
+          </View>
+          <IconeRotativo tamanho={20} />
         </View>
 
         <View style={[styles.tempo, urgente && styles.tempoUrgente]}>
-          <Text style={styles.tempoLabel}>Tempo limite</Text>
-          <View style={styles.tempoValorLinha}>
-            <MaterialCommunityIcons name="timer-outline" size={22} color={colors.error} />
-            <Text style={styles.tempoValor}>{tempo}</Text>
+          <Text style={[styles.tempoLabel, urgente && { color: colors.error }]}>Tempo limite</Text>
+          <View style={styles.tempoLinha}>
+            <MaterialCommunityIcons name="timer-outline" size={22} color={urgente ? colors.error : colors.primary} />
+            <Text style={[styles.tempoValor, urgente && { color: colors.error }]}>{formatarContagem(segundos)}</Text>
           </View>
         </View>
+      </View>
 
-        <View style={{ alignSelf: 'stretch' }}>
-          <Button
-            titulo="Cancelar pedido"
-            variante="perigo"
-            onPress={confirmarCancelamento}
-            carregando={aCancelar}
-          />
-        </View>
-
-        {/* DEMO: remover quando houver notificações reais */}
-        <View style={styles.demo}>
-          <Text style={styles.demoTitulo}>Demo: simular resposta do paciente</Text>
-          <View style={styles.demoBotoes}>
-            <Pressable
-              style={[styles.demoBotao, { borderColor: colors.success }]}
-              onPress={() => simularResposta('aprovado')}
-            >
-              <Text style={[styles.demoTexto, { color: colors.success }]}>Aprovar</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.demoBotao, { borderColor: colors.error }]}
-              onPress={() => simularResposta('negado')}
-            >
-              <Text style={[styles.demoTexto, { color: colors.error }]}>Negar</Text>
-            </Pressable>
-          </View>
-        </View>
+      <View style={styles.acoes}>
+        <Button titulo="Voltar" variante="secundario" onPress={voltarFicha} />
+        <Text style={styles.nota}>O pedido expira sozinho se o paciente não responder.</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  centro: { alignItems: 'center', justifyContent: 'center' },
-  conteudo: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xl, gap: spacing.md },
-  iconeGrande: {
+  container: { flex: 1, backgroundColor: colors.surface, paddingHorizontal: spacing.xl },
+  centro: { alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  conteudo: { flex: 1, alignItems: 'center', gap: spacing.md },
+  relogio: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
+  onda: {
+    position: 'absolute',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: colors.primarySoft,
+  },
+  relogioCentro: {
     width: 96,
     height: 96,
-    borderRadius: radius.full,
+    borderRadius: 48,
+    backgroundColor: colors.primaryFaint,
+    borderWidth: 2,
+    borderColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
   },
-  titulo: { fontFamily: fontFamily.semibold, fontSize: 20, color: colors.text, textAlign: 'center' },
-  texto: {
-    fontFamily: fontFamily.regular,
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  titulo: { fontFamily: fontFamily.semibold, fontSize: 20, color: colors.primaryDark, textAlign: 'center', marginTop: spacing.sm },
+  texto: { fontFamily: fontFamily.regular, fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   cartao: {
     alignSelf: 'stretch',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-  },
-  linhaDados: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginTop: spacing.md,
   },
-  linhaLabel: { fontFamily: fontFamily.regular, fontSize: 11, color: colors.textSecondary },
-  linhaValor: { fontFamily: fontFamily.medium, fontSize: 14, color: colors.text },
+  cartaoLabel: { fontFamily: fontFamily.regular, fontSize: 11, color: colors.textSecondary },
+  cartaoValor: { fontFamily: fontFamily.semibold, fontSize: 15, color: colors.text },
   tempo: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    backgroundColor: colors.errorSoft,
+    backgroundColor: colors.primaryFaint,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
-  tempoUrgente: { borderColor: colors.error },
-  tempoLabel: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.error },
-  tempoValorLinha: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  tempoValor: { fontFamily: fontFamily.bold, fontSize: 22, color: colors.error },
-  demo: {
-    alignSelf: 'stretch',
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    gap: spacing.sm,
-  },
-  demoTitulo: {
-    fontFamily: fontFamily.medium,
-    fontSize: 12,
-    color: colors.primary,
-    textAlign: 'center',
-  },
-  demoBotoes: { flexDirection: 'row', gap: spacing.md },
-  demoBotao: {
-    flex: 1,
-    height: 38,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  demoTexto: { fontFamily: fontFamily.semibold, fontSize: 13 },
+  tempoUrgente: { backgroundColor: colors.errorSoft },
+  tempoLabel: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.primary },
+  tempoLinha: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  tempoValor: { fontFamily: fontFamily.bold, fontSize: 24, color: colors.primary },
+  acoes: { alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.xl },
+  nota: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, textAlign: 'center' },
 });

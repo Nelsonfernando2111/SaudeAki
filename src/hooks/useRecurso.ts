@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { paraErroApi, type ErroApi } from '@/src/services/api';
 
@@ -11,51 +11,57 @@ interface Opcoes {
 
 /**
  * Carrega dados de um service e expõe os estados para skeleton,
- * pull-to-refresh e mensagens de erro.
+ * pull-to-refresh e mensagens de erro. `deps` deve ter valores simples (ids, strings).
  */
 export function useRecurso<T>(carregar: () => Promise<T>, deps: unknown[], opcoes: Opcoes = {}) {
   const { aoFocar = false, ativo = true } = opcoes;
+  const chave = JSON.stringify(deps);
+
   const [dados, setDados] = useState<T | null>(null);
   const [erro, setErro] = useState<ErroApi | null>(null);
-  const [carregando, setCarregando] = useState(true);
+  /** Chave dos deps já carregados: enquanto for diferente, está "a carregar" */
+  const [chaveCarregada, setChaveCarregada] = useState<string | null>(null);
   const [aAtualizar, setAAtualizar] = useState(false);
 
   const carregarRef = useRef(carregar);
-  carregarRef.current = carregar;
+  useLayoutEffect(() => {
+    carregarRef.current = carregar;
+  });
   const pedidoAtual = useRef(0);
-  const jaCarregou = useRef(false);
 
-  const executar = useCallback(async (modo: 'inicial' | 'atualizar' | 'silencioso') => {
+  const executar = useCallback(async (paraChave: string) => {
     const n = ++pedidoAtual.current;
-    if (modo === 'inicial') setCarregando(true);
-    if (modo === 'atualizar') setAAtualizar(true);
     try {
       const resultado = await carregarRef.current();
       if (n !== pedidoAtual.current) return;
       setDados(resultado);
       setErro(null);
-      jaCarregou.current = true;
     } catch (e) {
       if (n !== pedidoAtual.current) return;
       setErro(paraErroApi(e));
     } finally {
       if (n === pedidoAtual.current) {
-        setCarregando(false);
+        setChaveCarregada(paraChave);
         setAAtualizar(false);
       }
     }
   }, []);
 
   useEffect(() => {
-    if (!ativo) return;
-    jaCarregou.current = false;
-    executar('inicial');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ativo, executar, ...deps]);
+    if (ativo) executar(chave);
+  }, [ativo, chave, executar]);
+
+  const chaveRef = useRef(chave);
+  const carregadaRef = useRef(chaveCarregada);
+  useLayoutEffect(() => {
+    chaveRef.current = chave;
+    carregadaRef.current = chaveCarregada;
+  });
 
   useFocusEffect(
     useCallback(() => {
-      if (aoFocar && ativo && jaCarregou.current) executar('silencioso');
+      // Só recarrega em silêncio depois do primeiro carregamento
+      if (aoFocar && ativo && carregadaRef.current === chaveRef.current) executar(chaveRef.current);
     }, [aoFocar, ativo, executar])
   );
 
@@ -63,11 +69,14 @@ export function useRecurso<T>(carregar: () => Promise<T>, deps: unknown[], opcoe
     dados,
     setDados,
     erro,
-    carregando,
+    carregando: ativo && chaveCarregada !== chave,
     aAtualizar,
     /** Para o RefreshControl */
-    atualizar: () => executar('atualizar'),
+    atualizar: () => {
+      setAAtualizar(true);
+      executar(chave);
+    },
     /** Recarrega sem indicadores */
-    recarregar: () => executar('silencioso'),
+    recarregar: () => executar(chave),
   };
 }

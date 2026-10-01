@@ -1,4 +1,4 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, create, isAxiosError, type InternalAxiosRequestConfig } from 'axios';
 import type { CorpoErroApi, RespostaLogin } from '@/src/types';
 import { atualizarTokens, limparSessao, obterSessao } from '@/src/utils/sessao';
 
@@ -25,7 +25,7 @@ const ROTAS_PUBLICAS = ['/auth/login', '/auth/registo', '/auth/refresh'];
 
 const ePublica = (url?: string) => !!url && ROTAS_PUBLICAS.some((r) => url.startsWith(r));
 
-export const api = axios.create({
+export const api = create({
   baseURL: API_URL,
   // O Render pode demorar a "acordar" o servidor
   timeout: 30000,
@@ -60,7 +60,7 @@ const MENSAGENS_POR_STATUS: Record<number, string> = {
 
 export function paraErroApi(erro: unknown): ErroApi {
   if (erro instanceof ErroApi) return erro;
-  if (axios.isAxiosError(erro)) {
+  if (isAxiosError(erro)) {
     if (erro.response) {
       const { status, data } = erro.response as { status: number; data?: CorpoErroApi };
       const mensagem =

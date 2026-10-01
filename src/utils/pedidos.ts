@@ -50,3 +50,13 @@ export const INFO_ESTADO: Record<
     icone: 'clock-alert-outline',
   },
 };
+
+/** Um registo por paciente (o pedido mais recente), pela ordem da lista */
+export function pacientesRecentes(pedidos: PedidoAcesso[]): PedidoAcesso[] {
+  const vistos = new Set<string>();
+  return pedidos.filter((p) => {
+    if (vistos.has(p.pacienteId)) return false;
+    vistos.add(p.pacienteId);
+    return true;
+  });
+}

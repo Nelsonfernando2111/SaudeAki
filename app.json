@@ -8,9 +8,11 @@
     "scheme": "idclin",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.idclin.app"
     },
     "android": {
+      "package": "com.idclin.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -29,11 +31,28 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1E3A8A"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "expo-font",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#2563EB",
+          "defaultChannel": "pedidos-acesso",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "A IDCLIN precisa de acesso às fotos para anexar resultados de exames.",
+          "cameraPermission": "A IDCLIN precisa da câmara para fotografar resultados de exames.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

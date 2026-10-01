@@ -12,6 +12,8 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 
+// Define a tarefa de fundo do push FCM (tem de ser carregado cedo)
+import '@/src/services/notificacoes';
 import { ToastHost } from '@/src/components/anim/ToastHost';
 import { definirAoExpirarSessao } from '@/src/services/api';
 import { useSessaoStore } from '@/src/store/sessao.store';

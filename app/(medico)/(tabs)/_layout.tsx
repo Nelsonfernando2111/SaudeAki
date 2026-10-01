@@ -7,9 +7,9 @@ import { colors, fontFamily } from '@/src/theme';
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 function icone(ativo: IconName, inativo: IconName) {
-  return ({ color, focused }: { color: ColorValue; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? ativo : inativo} size={24} color={color as string} />
-  );
+  return function IconeTab({ color, focused }: { color: ColorValue; focused: boolean }) {
+    return <MaterialCommunityIcons name={focused ? ativo : inativo} size={24} color={color as string} />;
+  };
 }
 
 export default function MedicoTabs() {

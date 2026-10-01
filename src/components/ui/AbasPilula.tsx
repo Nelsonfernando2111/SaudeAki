@@ -19,7 +19,7 @@ export function AbasPilula<T extends string>({ abas, ativa, onMudar }: AbasPilul
   const x = useSharedValue(0);
 
   useEffect(() => {
-    x.value = withSpring(indice * larguraAba, { damping: 20, stiffness: 220 });
+    x.set(withSpring(indice * larguraAba, { damping: 20, stiffness: 220 }));
   }, [indice, larguraAba, x]);
 
   const estiloIndicador = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));

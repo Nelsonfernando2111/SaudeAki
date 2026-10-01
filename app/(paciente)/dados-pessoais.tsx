@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useVoltar } from '@/src/hooks/useVoltar';
 import Animated from 'react-native-reanimated';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -54,7 +54,7 @@ function valoresDe(p: Paciente | null): Entrada {
 }
 
 export default function DadosPessoais() {
-  const router = useRouter();
+  const voltar = useVoltar();
   const paciente = useSessaoStore((s) => s.paciente);
   const definirPaciente = useSessaoStore((s) => s.definirPaciente);
   const [erro, setErro] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export default function DadosPessoais() {
       try {
         definirPaciente(await atualizarMeuPerfil(corpo));
         toast.sucesso('Dados atualizados');
-        router.back();
+        voltar();
       } catch (e) {
         const err = paraErroApi(e);
         setErro(err.status === 409 ? 'Este telefone já está a ser usado por outra conta.' : err.message);

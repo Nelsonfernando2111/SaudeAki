@@ -57,20 +57,20 @@ export function Tocavel({
   }));
 
   function aoPressionar(e: GestureResponderEvent) {
-    s.value = withSpring(escala, { damping: 18, stiffness: 400 });
+    s.set(withSpring(escala, { damping: 18, stiffness: 400 }));
     if (ripple) {
-      x.value = e.nativeEvent.locationX;
-      y.value = e.nativeEvent.locationY;
-      progresso.value = 0;
-      opacidade.value = 1;
-      progresso.value = withTiming(1, { duration: 450, easing: Easing.out(Easing.quad) });
+      x.set(e.nativeEvent.locationX);
+      y.set(e.nativeEvent.locationY);
+      progresso.set(0);
+      opacidade.set(1);
+      progresso.set(withTiming(1, { duration: 450, easing: Easing.out(Easing.quad) }));
     }
     onPressIn?.(e);
   }
 
   function aoLargar(e: GestureResponderEvent) {
-    s.value = withSpring(1, { damping: 14, stiffness: 300 });
-    opacidade.value = withTiming(0, { duration: 400 });
+    s.set(withSpring(1, { damping: 14, stiffness: 300 }));
+    opacidade.set(withTiming(0, { duration: 400 }));
     onPressOut?.(e);
   }
 
