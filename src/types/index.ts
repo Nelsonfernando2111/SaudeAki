@@ -13,10 +13,24 @@ export type GrupoSanguineo = 'A' | 'B' | 'AB' | 'O';
 export type FatorRh = 'POSITIVO' | 'NEGATIVO';
 export type TipoCondicaoMedica = 'ALERGIA' | 'DOENCA_CRONICA';
 export type SeveridadeCondicao = 'BAIXA' | 'MEDIA' | 'CRITICA';
-export type StatusExame = 'PENDENTE' | 'REALIZADO' | 'CANCELADO';
+/** PENDENTE = solicitado · REALIZADO = concluído */
+export type StatusExame = 'PENDENTE' | 'EM_ANALISE' | 'REALIZADO' | 'CANCELADO';
+export type EstadoCondicao = 'ATIVA' | 'EM_REMISSAO' | 'INATIVA' | 'RESOLVIDA';
+export type MecanismoAlergia =
+  | 'TIPO_I_IGE'
+  | 'TIPO_II_CITOTOXICA'
+  | 'TIPO_III_IMUNOCOMPLEXOS'
+  | 'TIPO_IV_TARDIA'
+  | 'INTOLERANCIA'
+  | 'EFEITO_ADVERSO'
+  | 'DESCONHECIDO';
+export type CondutaAlergia = 'USAR_COM_PRECAUCAO' | 'SUBSTITUIR_SE_POSSIVEL' | 'EVITAR' | 'BLOQUEIO_ABSOLUTO';
+export type CategoriaExame = 'LABORATORIAL' | 'IMAGEM' | 'ANATOMOPATOLOGICO' | 'CARDIOLOGICO' | 'OUTRO';
+export type ClassificacaoResultado = 'NORMAL' | 'BAIXO' | 'ALTO' | 'ALTERADO' | 'CRITICO';
 export type EstadoPedido = 'PENDENTE' | 'APROVADO' | 'RECUSADO' | 'EXPIRADO';
 export type TipoAcesso = 'EMERGENCIA' | 'COMPLETO';
 export type EstadoSessao = 'ATIVA' | 'REVOGADA' | 'EXPIRADA';
+export type TipoDocumento = 'BI' | 'PASSAPORTE' | 'DIRE' | 'CARTA_CONDUCAO' | 'CARTAO_ELEITOR' | 'OUTRO';
 
 /* ---------- Genéricos ---------- */
 
@@ -54,12 +68,23 @@ export interface DadosRegisto {
   nomeCompleto: string;
   senha: string;
   telefone: string;
-  dataNascimento?: string; // yyyy-MM-dd
-  genero?: string;
+  dataNascimento: string; // yyyy-MM-dd, no passado
+  genero: string;
+  contactoEmergencia: string;
   cidade?: string;
-  contactoEmergencia?: string;
   grupoSanguineo?: GrupoSanguineo;
   fatorRh?: FatorRh;
+  /** Vêm sempre juntos */
+  tipoDocumento?: TipoDocumento;
+  numeroDocumento?: string;
+}
+
+/** Ficheiro escolhido no telemóvel (câmara, galeria ou documento) */
+export interface ArquivoLocal {
+  uri: string;
+  nome: string;
+  tipo: string;
+  tamanho?: number;
 }
 
 /* ---------- Paciente ---------- */
@@ -70,11 +95,17 @@ export interface Paciente {
   nomeCompleto: string;
   telefone: string;
   dataNascimento: string | null;
+  /** Calculada a partir de dataNascimento */
+  idade?: number | null;
   genero: string | null;
   grupoSanguineo: GrupoSanguineo | null;
   fatorRh: FatorRh | null;
   cidade: string | null;
   contactoEmergencia: string | null;
+  tipoDocumento?: TipoDocumento | null;
+  numeroDocumento?: string | null;
+  /** Ex.: "/api/pacientes/PAC-GN5U/documento-identidade"; null sem ficheiro */
+  documentoIdentidadeUrl?: string | null;
   criadoEm: string;
 }
 
@@ -89,23 +120,48 @@ export type AtualizacaoPaciente = Partial<
     | 'contactoEmergencia'
     | 'grupoSanguineo'
     | 'fatorRh'
+    | 'tipoDocumento'
+    | 'numeroDocumento'
   >
 >;
 
-export interface CondicaoMedica {
+/** Campos só usados quando tipo = ALERGIA */
+export interface CamposAlergia {
+  agente?: string | null;
+  classeFarmacologica?: string | null;
+  mecanismo?: MecanismoAlergia | null;
+  reacaoObservada?: string | null;
+  conduta?: CondutaAlergia | null;
+}
+
+export interface CondicaoMedica extends CamposAlergia {
   id: number;
   pacienteId: string;
   pacienteNome: string;
   tipo: TipoCondicaoMedica;
   descricao: string;
   severidade: SeveridadeCondicao;
+  /** Registos antigos sem estado aparecem como ATIVA */
+  estado?: EstadoCondicao | null;
+  codigoCid?: string | null;
+  dataInicio?: string | null; // yyyy-MM-dd
+  dataFim?: string | null;
+  observacoes?: string | null;
+  registadoPorId?: string | null;
+  registadoPorNome?: string | null;
   registradoEm: string;
+  atualizadoEm?: string | null;
 }
 
-export interface DadosCondicao {
+export interface DadosCondicao extends CamposAlergia {
   tipo: TipoCondicaoMedica;
   descricao: string;
   severidade: SeveridadeCondicao;
+  estado?: EstadoCondicao;
+  codigoCid?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  observacoes?: string;
 }
 
 export interface ResultadoExame {
@@ -114,9 +170,23 @@ export interface ResultadoExame {
   valor: string;
   unidadeMedida?: string | null;
   valorReferencia?: string | null;
+  /** Calculada pelo servidor se não vier (referência numérica) */
+  classificacao?: ClassificacaoResultado | null;
+  /** Só na resposta; null se não foi possível classificar */
+  anormal?: boolean | null;
 }
 
-export interface Exame {
+export interface CamposLaudo {
+  categoria?: CategoriaExame | null;
+  codigo?: string | null;
+  indicacaoClinica?: string | null;
+  achados?: string | null;
+  conclusao?: string | null;
+  responsavelLaudoNome?: string | null;
+  responsavelLaudoNumeroOrdem?: string | null;
+}
+
+export interface Exame extends CamposLaudo {
   id: number;
   pacienteId: string;
   pacienteNome: string;
@@ -130,16 +200,24 @@ export interface Exame {
   status?: StatusExame;
   /** Na resposta chama-se `resultado` (singular) */
   resultado: ResultadoExame[];
+  temResultadoAnormal?: boolean;
 }
 
 export interface DadosExame {
   tipoExame?: string;
+  categoria?: CategoriaExame;
+  codigo?: string;
+  indicacaoClinica?: string;
   unidadeSanitariaId?: number;
   dataSolicitado?: string; // yyyy-MM-ddTHH:mm:ss
   dataRealizado?: string;
   status?: StatusExame;
   /** No pedido chama-se `resultados` (plural) */
-  resultados?: Omit<ResultadoExame, 'id'>[];
+  resultados?: Omit<ResultadoExame, 'id' | 'anormal'>[];
+  achados?: string;
+  conclusao?: string;
+  responsavelLaudoNome?: string;
+  responsavelLaudoNumeroOrdem?: string;
 }
 
 export interface AnexoExame {
@@ -153,6 +231,18 @@ export interface AnexoExame {
   criadoEm: string;
 }
 
+/** Conflito entre um medicamento e uma alergia do paciente */
+export interface AlertaAlergia {
+  condicaoId: number;
+  alergia: string;
+  classeFarmacologica: string | null;
+  motivo: 'MESMO_AGENTE' | 'MESMA_CLASSE';
+  severidade: SeveridadeCondicao;
+  mecanismo: MecanismoAlergia | null;
+  reacaoObservada: string | null;
+  conduta: CondutaAlergia;
+}
+
 export interface Prescricao {
   id: number;
   pacienteId: string;
@@ -163,8 +253,11 @@ export interface Prescricao {
   dosagem: string | null;
   frequencia: string | null;
   duracao: string | null;
+  classeFarmacologica?: string | null;
   ativa: boolean;
   dataPrescricao: string;
+  /** Só na resposta de criar/atualizar, quando há avisos que permitem prescrever */
+  alertasAlergia?: AlertaAlergia[] | null;
 }
 
 export interface DadosPrescricao {
@@ -172,10 +265,18 @@ export interface DadosPrescricao {
   dosagem?: string;
   frequencia?: string;
   duracao?: string;
+  classeFarmacologica?: string;
   ativa?: boolean;
+  /** true para prescrever apesar de uma alergia com conduta EVITAR */
+  confirmarAlertaAlergia?: boolean;
 }
 
 export interface HistoricoClinico {
+  /** Destaques no topo */
+  diabetico?: boolean;
+  temMedicacaoAtiva?: boolean;
+  /** Subconjunto de `prescricoes` com ativa: true */
+  medicacaoAtiva?: Prescricao[];
   paciente: Paciente;
   condicoes: CondicaoMedica[];
   exames: Exame[];
@@ -194,6 +295,7 @@ export interface FichaEmergencia {
   codUnicoPaciente: string;
   nomeCompleto: string;
   tipoSanguineo: { grupoSanguineo: GrupoSanguineo | null; fatorRh: FatorRh | null } | null;
+  diabetico?: boolean;
   alergias: CondicaoMedica[];
   condicoesCronicas: CondicaoMedica[];
   medicacaoAtiva: MedicacaoEmergencia[];

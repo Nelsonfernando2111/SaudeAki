@@ -10,15 +10,16 @@ import { useTremor } from '@/src/components/anim/useTremor';
 import { Skeleton } from '@/src/components/anim/Skeleton';
 import { Alerta } from '@/src/components/ui/Alerta';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { Input } from '@/src/components/ui/Input';
 import { Opcoes } from '@/src/components/ui/Opcoes';
 import { paraErroApi } from '@/src/services/api';
 import { atualizarMeuPerfil, obterMeuPerfil } from '@/src/services/paciente.service';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { toast } from '@/src/store/toast.store';
-import { dataParaApi, formatarData } from '@/src/utils/datas';
-import type { AtualizacaoPaciente, FatorRh, GrupoSanguineo, Paciente } from '@/src/types';
+import { dataNoPassado, dataParaApi, formatarData } from '@/src/utils/datas';
+import { TIPOS_DOCUMENTO } from '@/src/utils/clinico';
+import { CartaoDocumento } from '@/src/components/shared/CartaoDocumento';
+import type { AtualizacaoPaciente, FatorRh, GrupoSanguineo, Paciente, TipoDocumento } from '@/src/types';
 import { colors, spacing } from '@/src/theme';
 
 const schema = z.object({
@@ -29,13 +30,29 @@ const schema = z.object({
     .refine((v) => /^\+?\d{9,}$/.test(v), 'Telefone inválido'),
   dataNascimento: z
     .string()
-    .refine((v) => !v.trim() || dataParaApi(v) !== null, 'Use o formato dd/mm/aaaa'),
-  genero: z.string().nullable(),
+    .min(1, 'Informe a data de nascimento')
+    .refine((v) => dataParaApi(v) !== null, 'Use o formato dd/mm/aaaa')
+    .refine((v) => dataNoPassado(v), 'A data tem de ser no passado'),
+  genero: z.string().nullable().refine((v) => !!v, 'Escolha o sexo'),
   cidade: z.string(),
-  contactoEmergencia: z.string(),
+  contactoEmergencia: z
+    .string()
+    .transform((v) => v.replace(/\s/g, ''))
+    .refine((v) => /^\+?\d{9,}$/.test(v), 'Contacto de emergência inválido'),
   grupoSanguineo: z.enum(['A', 'B', 'AB', 'O']).nullable(),
   fatorRh: z.enum(['POSITIVO', 'NEGATIVO']).nullable(),
-});
+  tipoDocumento: z.enum(['BI', 'PASSAPORTE', 'DIRE', 'CARTA_CONDUCAO', 'CARTAO_ELEITOR', 'OUTRO']).nullable(),
+  numeroDocumento: z.string(),
+})
+  // O tipo e o número do documento vêm sempre juntos
+  .refine((d) => !d.tipoDocumento || d.numeroDocumento.trim().length > 0, {
+    message: 'Informe o número do documento',
+    path: ['numeroDocumento'],
+  })
+  .refine((d) => !!d.tipoDocumento || d.numeroDocumento.trim().length === 0, {
+    message: 'Escolha o tipo de documento',
+    path: ['tipoDocumento'],
+  });
 
 type Entrada = z.input<typeof schema>;
 type Saida = z.output<typeof schema>;
@@ -50,6 +67,8 @@ function valoresDe(p: Paciente | null): Entrada {
     contactoEmergencia: p?.contactoEmergencia ?? '',
     grupoSanguineo: p?.grupoSanguineo ?? null,
     fatorRh: p?.fatorRh ?? null,
+    tipoDocumento: p?.tipoDocumento ?? null,
+    numeroDocumento: p?.numeroDocumento ?? '',
   };
 }
 
@@ -88,9 +107,11 @@ export default function DadosPessoais() {
         dataNascimento: dataParaApi(d.dataNascimento) ?? undefined,
         genero: d.genero ?? undefined,
         cidade: d.cidade.trim() || undefined,
-        contactoEmergencia: d.contactoEmergencia.replace(/\s/g, '') || undefined,
+        contactoEmergencia: d.contactoEmergencia,
         grupoSanguineo: d.grupoSanguineo ?? undefined,
         fatorRh: d.fatorRh ?? undefined,
+        tipoDocumento: d.tipoDocumento ?? undefined,
+        numeroDocumento: d.numeroDocumento.trim().toUpperCase() || undefined,
       };
       try {
         definirPaciente(await atualizarMeuPerfil(corpo));
@@ -107,7 +128,6 @@ export default function DadosPessoais() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Cabecalho titulo="Dados pessoais" voltar />
 
       {carregando ? (
         <View style={styles.scroll}>
@@ -156,16 +176,16 @@ export default function DadosPessoais() {
             <Controller
               control={control}
               name="genero"
-              render={({ field }) => (
+              render={({ field, fieldState }) => (
                 <Opcoes
-                  label="Género"
-                  limpavel
+                  label="Sexo"
                   opcoes={[
                     { valor: 'F', titulo: 'Feminino' },
                     { valor: 'M', titulo: 'Masculino' },
                   ]}
                   valor={field.value}
                   onMudar={field.onChange}
+                  erro={fieldState.error?.message}
                 />
               )}
             />
@@ -177,8 +197,15 @@ export default function DadosPessoais() {
             <Controller
               control={control}
               name="contactoEmergencia"
-              render={({ field }) => (
-                <Input label="Contacto de emergência" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} />
+              render={({ field, fieldState }) => (
+                <Input
+                  label="Contacto de emergência"
+                  keyboardType="phone-pad"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  onBlur={field.onBlur}
+                  erro={fieldState.error?.message}
+                />
               )}
             />
             <Controller
@@ -208,9 +235,48 @@ export default function DadosPessoais() {
                 />
               )}
             />
+            <Controller
+              control={control}
+              name="tipoDocumento"
+              render={({ field, fieldState }) => (
+                <Opcoes<TipoDocumento>
+                  label="Tipo de documento de identidade"
+                  limpavel
+                  opcoes={TIPOS_DOCUMENTO}
+                  valor={field.value}
+                  onMudar={field.onChange}
+                  erro={fieldState.error?.message}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="numeroDocumento"
+              render={({ field, fieldState }) => (
+                <Input
+                  label="Número do documento"
+                  autoCapitalize="characters"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  erro={fieldState.error?.message}
+                />
+              )}
+            />
           </Animated.View>
 
           <Button titulo="Guardar" icone="content-save-outline" onPress={guardar} carregando={formState.isSubmitting} />
+
+          <View style={styles.documento}>
+            <CartaoDocumento
+              tipo={paciente?.tipoDocumento}
+              numero={paciente?.numeroDocumento}
+              temFicheiro={!!paciente?.documentoIdentidadeUrl}
+              aoAtualizar={(p) => {
+                if (p) definirPaciente(p);
+                else if (paciente) definirPaciente({ ...paciente, documentoIdentidadeUrl: null });
+              }}
+            />
+          </View>
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -220,4 +286,5 @@ export default function DadosPessoais() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  documento: { marginTop: spacing.xl },
 });

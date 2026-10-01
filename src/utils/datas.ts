@@ -58,6 +58,12 @@ export function dataParaApi(texto: string): string | null {
   return `${ano}-${mes}-${dia}`;
 }
 
+/** "12/04/1995" é anterior a hoje? */
+export function dataNoPassado(texto: string): boolean {
+  const iso = dataParaApi(texto);
+  return !!iso && new Date(`${iso}T00:00:00`).getTime() < Date.now();
+}
+
 /** Data e hora local no formato da API: yyyy-MM-ddTHH:mm:ss */
 export function agoraLocalApi(): string {
   return format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");

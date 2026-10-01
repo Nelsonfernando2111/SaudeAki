@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,17 +9,15 @@ import { Expansivel } from '@/src/components/anim/Expansivel';
 import { Skeleton, SkeletonLista } from '@/src/components/anim/Skeleton';
 import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { Estado } from '@/src/components/ui/Estado';
+import { Destaques } from '@/src/components/ui/Destaques';
 import { Etiqueta } from '@/src/components/ui/Etiqueta';
+import { CartaoDocumento } from '@/src/components/shared/CartaoDocumento';
 import { useRecurso } from '@/src/hooks/useRecurso';
 import { useVoltar } from '@/src/hooks/useVoltar';
-import { paraErroApi } from '@/src/services/api';
 import { obterFichaEmergencia } from '@/src/services/paciente.service';
-import { listarPedidos, solicitarAcesso } from '@/src/services/pedido.service';
-import { toast } from '@/src/store/toast.store';
-import { INFO_SEVERIDADE, posologia, tipoSanguineo } from '@/src/utils/clinico';
-import { sessaoProvavelmenteAtiva } from '@/src/utils/pedidos';
+import { useRecentesStore } from '@/src/store/recentes.store';
+import { INFO_CONDUTA, INFO_SEVERIDADE, posologia, tipoSanguineo } from '@/src/utils/clinico';
 import type { CondicaoMedica } from '@/src/types';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
@@ -29,9 +27,19 @@ function ListaCondicoes({ itens, vazio }: { itens: CondicaoMedica[]; vazio: stri
     <View style={{ paddingBottom: spacing.sm }}>
       {itens.map((c) => {
         const sev = INFO_SEVERIDADE[c.severidade];
+        const conduta = c.conduta ? INFO_CONDUTA[c.conduta] : null;
+        const detalhe = [c.agente ? `Agente: ${c.agente}` : null, c.reacaoObservada ? `Reação: ${c.reacaoObservada}` : null, c.codigoCid ? `CID ${c.codigoCid}` : null]
+          .filter(Boolean)
+          .join(' · ');
         return (
           <View key={c.id} style={styles.item}>
-            <Text style={styles.itemTexto}>{c.descricao}</Text>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.itemTexto}>{c.descricao}</Text>
+              {detalhe ? <Text style={styles.itemSub}>{detalhe}</Text> : null}
+              {conduta ? (
+                <Etiqueta texto={conduta.label} cor={conduta.cor} fundo={conduta.fundo} icone="shield-alert-outline" />
+              ) : null}
+            </View>
             <Etiqueta texto={sev.label} cor={sev.cor} fundo={sev.fundo} />
           </View>
         );
@@ -44,43 +52,22 @@ export default function FichaPaciente() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [aSolicitar, setASolicitar] = useState(false);
   const voltar = useVoltar();
+  const registarRecente = useRecentesStore((s) => s.registar);
 
   const ficha = useRecurso(() => obterFichaEmergencia(id), [id]);
-  // Há um pedido aprovado há menos de 30 min para este paciente?
-  const pedidos = useRecurso(() => listarPedidos({ size: 30 }).then((p) => p.content), [], { aoFocar: true });
-
   const f = ficha.dados;
-  const sessaoAtiva = (pedidos.dados ?? []).find(
-    (p) => sessaoProvavelmenteAtiva(p) && (p.pacienteId === id || p.pacienteNome === f?.nomeCompleto)
-  );
 
-  async function pedirAcesso() {
-    if (!f) return;
-    setASolicitar(true);
-    try {
-      const pedido = await solicitarAcesso(f.codUnicoPaciente);
-      router.push({
-        pathname: '/(medico)/aguardando-aprovacao',
-        params: {
-          id: String(pedido.id),
-          pacienteId: pedido.pacienteId,
-          pacienteNome: pedido.pacienteNome,
-          dataExpiracao: pedido.dataExpiracao,
-        },
-      } as any);
-    } catch (e) {
-      toast.erro(paraErroApi(e).message);
-    } finally {
-      setASolicitar(false);
-    }
-  }
+  // Guarda nos "pacientes recentes" do médico
+  useEffect(() => {
+    if (f) registarRecente({ id, codUnico: f.codUnicoPaciente, nome: f.nomeCompleto });
+  }, [f, id, registarRecente]);
+
+  const abrirHistorico = () => router.push(`/(medico)/historico/${f?.codUnicoPaciente ?? id}` as any);
 
   if (ficha.carregando) {
     return (
       <View style={styles.container}>
-        <Cabecalho titulo="Ficha de Emergência" voltar />
         <View style={styles.scroll}>
           <View style={styles.identificacao}>
             <Skeleton largura={68} altura={68} raio={34} />
@@ -99,7 +86,6 @@ export default function FichaPaciente() {
     const naoExiste = ficha.erro?.status === 404;
     return (
       <View style={styles.container}>
-        <Cabecalho titulo="Ficha de Emergência" voltar />
         <Estado
           icone={naoExiste ? 'account-question-outline' : 'cloud-alert-outline'}
           titulo={naoExiste ? 'Paciente não encontrado' : 'Não foi possível carregar a ficha'}
@@ -112,7 +98,6 @@ export default function FichaPaciente() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Ficha de Emergência" voltar />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -120,10 +105,7 @@ export default function FichaPaciente() {
         refreshControl={
           <RefreshControl
             refreshing={ficha.aAtualizar}
-            onRefresh={() => {
-              ficha.atualizar();
-              pedidos.recarregar();
-            }}
+            onRefresh={ficha.atualizar}
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
@@ -143,6 +125,20 @@ export default function FichaPaciente() {
             Acesso de emergência: não precisa de aprovação, mas fica registado no histórico do paciente.
           </Text>
         </Animated.View>
+
+        <Destaques
+          itens={[
+            f.diabetico
+              ? { icone: 'diabetes', texto: 'Diabético', alerta: true }
+              : { icone: 'check-circle-outline', texto: 'Não diabético' },
+            ...(f.alergias.some((a) => a.severidade === 'CRITICA' || a.conduta === 'BLOQUEIO_ABSOLUTO')
+              ? [{ icone: 'alert-octagon-outline' as const, texto: 'Alergia crítica', alerta: true }]
+              : []),
+            ...(f.medicacaoAtiva.length > 0
+              ? [{ icone: 'pill' as const, texto: `${f.medicacaoAtiva.length} medicamento(s) ativo(s)` }]
+              : []),
+          ]}
+        />
 
         <Animated.View entering={FadeInDown.delay(60).duration(300)} style={styles.sangue}>
           <MaterialCommunityIcons name="water" size={26} color={colors.error} />
@@ -183,24 +179,13 @@ export default function FichaPaciente() {
             )}
           </Expansivel>
         </Animated.View>
+        <Animated.View entering={FadeInDown.delay(300).duration(300)}>
+          <CartaoDocumento pacienteId={id} />
+        </Animated.View>
       </ScrollView>
 
       <View style={[styles.rodape, { paddingBottom: insets.bottom + spacing.lg }]}>
-        {sessaoAtiva ? (
-          <Button
-            titulo="Abrir histórico completo"
-            icone="lock-open-outline"
-            variante="sucesso"
-            onPress={() => router.push(`/(medico)/historico/${sessaoAtiva.pacienteId}` as any)}
-          />
-        ) : (
-          <Button
-            titulo="Solicitar acesso completo"
-            icone="shield-key-outline"
-            onPress={pedirAcesso}
-            carregando={aSolicitar}
-          />
-        )}
+        <Button titulo="Abrir histórico completo" icone="folder-account-outline" onPress={abrirHistorico} />
       </View>
     </View>
   );

@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 
 import { obterMeuPerfilMedico } from '@/src/services/medico.service';
 import { useSessaoStore } from '@/src/store/sessao.store';
-import { colors } from '@/src/theme';
+import { comCabecalho, opcoesStack } from '@/src/utils/navegacao';
 
 export default function MedicoLayout() {
   const medico = useSessaoStore((s) => s.medico);
@@ -16,18 +16,10 @@ export default function MedicoLayout() {
   }, []);
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
+    <Stack screenOptions={opcoesStack}>
       <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-      <Stack.Screen
-        name="aguardando-aprovacao"
-        options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
-      />
+      <Stack.Screen name="paciente/[id]" options={comCabecalho('Ficha de Emergência')} />
+      <Stack.Screen name="historico/[id]" options={comCabecalho('Histórico Clínico')} />
     </Stack>
   );
 }

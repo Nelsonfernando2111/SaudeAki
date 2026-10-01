@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Extrapolation,
   FadeInDown,
@@ -15,7 +14,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { Skeleton } from '@/src/components/anim/Skeleton';
 import { Tocavel } from '@/src/components/anim/Tocavel';
-import { LogoMini } from '@/src/components/shared/LogoMini';
 import { Etiqueta } from '@/src/components/ui/Etiqueta';
 import { useRecurso } from '@/src/hooks/useRecurso';
 import { obterMeuHistorico } from '@/src/services/paciente.service';
@@ -58,7 +56,6 @@ function CartaoResumo({ icone, cor, fundo, titulo, detalhe, indice, onPress }: C
 
 export default function HomePaciente() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const paciente = useSessaoStore((s) => s.paciente);
   const definirPaciente = useSessaoStore((s) => s.definirPaciente);
 
@@ -124,7 +121,7 @@ export default function HomePaciente() {
         onScroll={aoRolar}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}
+        contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
             refreshing={historico.aAtualizar}
@@ -134,10 +131,6 @@ export default function HomePaciente() {
           />
         }
       >
-        <View style={styles.topo}>
-          <LogoMini />
-        </View>
-
         {/* Herói azul com parallax */}
         <Animated.View style={[styles.heroi, estiloHeroi]}>
           <MaterialCommunityIcons name="heart-pulse" size={120} color="rgba(255,255,255,0.12)" style={styles.heroiMarca} />
@@ -273,8 +266,7 @@ export default function HomePaciente() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingBottom: spacing.xxl },
-  topo: { paddingHorizontal: spacing.xl, marginBottom: spacing.lg },
+  scroll: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
   heroi: {
     backgroundColor: colors.primary,
     marginHorizontal: spacing.xl,

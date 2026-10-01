@@ -2,7 +2,6 @@ import { StyleSheet, View } from 'react-native';
 
 import { SkeletonLista, Skeleton } from '@/src/components/anim/Skeleton';
 import { VistaHistorico } from '@/src/components/shared/VistaHistorico';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { Estado } from '@/src/components/ui/Estado';
 import { useRecurso } from '@/src/hooks/useRecurso';
 import { obterMeuHistorico } from '@/src/services/paciente.service';
@@ -13,7 +12,6 @@ export default function Historico() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Histórico Clínico" />
 
       {historico.carregando ? (
         <View style={styles.esqueleto}>

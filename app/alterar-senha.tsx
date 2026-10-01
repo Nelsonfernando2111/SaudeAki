@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { useTremor } from '@/src/components/anim/useTremor';
 import { Alerta } from '@/src/components/ui/Alerta';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { Input } from '@/src/components/ui/Input';
 import { paraErroApi } from '@/src/services/api';
 import { alterarSenha } from '@/src/services/auth.service';
@@ -67,7 +66,6 @@ export default function AlterarSenha() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Cabecalho titulo="Alterar senha" voltar />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.texto}>
           Ao alterar a senha, as sessões noutros dispositivos são terminadas.

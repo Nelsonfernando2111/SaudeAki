@@ -37,12 +37,15 @@ export const api = create({
 export class ErroApi extends Error {
   status?: number;
   detalhes: string[];
+  /** Título do erro do servidor, ex.: "Alerta de alergia" */
+  erro?: string;
 
-  constructor(mensagem: string, status?: number, detalhes: string[] = []) {
+  constructor(mensagem: string, status?: number, detalhes: string[] = [], erro?: string) {
     super(mensagem);
     this.name = 'ErroApi';
     this.status = status;
     this.detalhes = detalhes;
+    this.erro = erro;
   }
 }
 
@@ -55,6 +58,7 @@ const MENSAGENS_POR_STATUS: Record<number, string> = {
   410: 'O pedido expirou.',
   413: 'O ficheiro é maior que 5 MB.',
   415: 'Tipo de ficheiro não suportado.',
+  502: 'Falha ao guardar ou obter o ficheiro. Tente novamente.',
   500: 'Erro no servidor. Tente novamente mais tarde.',
 };
 
@@ -65,7 +69,7 @@ export function paraErroApi(erro: unknown): ErroApi {
       const { status, data } = erro.response as { status: number; data?: CorpoErroApi };
       const mensagem =
         data?.mensagem || MENSAGENS_POR_STATUS[status] || data?.erro || 'Ocorreu um erro.';
-      return new ErroApi(mensagem, status, data?.detalhes ?? []);
+      return new ErroApi(mensagem, status, data?.detalhes ?? [], data?.erro);
     }
     if (erro.code === 'ECONNABORTED') {
       return new ErroApi('O servidor demorou demasiado a responder. Tente de novo.');
@@ -157,4 +161,18 @@ api.interceptors.response.use(
 export async function cabecalhoAutorizacao(): Promise<Record<string, string>> {
   const sessao = await obterSessao();
   return sessao?.accessToken ? { Authorization: `Bearer ${sessao.accessToken}` } : {};
+}
+
+/**
+ * Link temporário para um ficheiro protegido (anexo ou documento de identidade).
+ * Com Cloudinary a API responde 302 para um link assinado válido 5 min: um HEAD com
+ * o token segue o redirect e devolve esse link. Sem Cloudinary (o ficheiro vem da
+ * própria API, que exige token) devolve null.
+ */
+export async function obterLinkTemporario(caminho: string): Promise<string | null> {
+  const url = caminho.startsWith('http') ? caminho : `${SERVIDOR_URL}${caminho}`;
+  const resposta = await fetch(url, { method: 'HEAD', headers: await cabecalhoAutorizacao() });
+  if (resposta.status === 404) throw new ErroApi('Ficheiro não encontrado.', 404);
+  if (!resposta.ok) throw new ErroApi(MENSAGENS_POR_STATUS[resposta.status] ?? 'Não foi possível abrir o ficheiro.', resposta.status);
+  return resposta.url && !resposta.url.startsWith(SERVIDOR_URL) ? resposta.url : null;
 }

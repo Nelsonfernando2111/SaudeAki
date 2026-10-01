@@ -9,7 +9,8 @@ import { topicos } from '@/src/services/realtime';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { estadoEfetivo } from '@/src/utils/pedidos';
 import type { PedidoAcesso } from '@/src/types';
-import { colors } from '@/src/theme';
+import { useAvisosStore } from '@/src/store/avisos.store';
+import { comCabecalho, opcoesStack } from '@/src/utils/navegacao';
 
 const INTERVALO_POLLING_MS = 10000;
 
@@ -17,6 +18,7 @@ export default function PacienteLayout() {
   const paciente = useSessaoStore((s) => s.paciente);
   const definirPaciente = useSessaoStore((s) => s.definirPaciente);
   const vistos = useRef(new Set<number>());
+  const definirPendentes = useAvisosStore((s) => s.definirPedidosPendentes);
 
   // Recarrega o perfil quando a app abre com sessão guardada
   useEffect(() => {
@@ -78,25 +80,23 @@ export default function PacienteLayout() {
     if (!pacienteId) return;
     const verificar = () =>
       listarPedidos({ estado: 'PENDENTE', size: 5 })
-        .then((pagina) => pagina.content.forEach(abrirPedido))
+        .then((pagina) => {
+          definirPendentes(pagina.content.filter((p) => estadoEfetivo(p) === 'PENDENTE'));
+          pagina.content.forEach(abrirPedido);
+        })
         .catch(() => {});
     verificar();
     const t = setInterval(verificar, INTERVALO_POLLING_MS);
     return () => clearInterval(t);
-  }, [pacienteId, abrirPedido]);
+  }, [pacienteId, abrirPedido, definirPendentes]);
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
+    <Stack screenOptions={opcoesStack}>
       <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+      <Stack.Screen name="dados-pessoais" options={comCabecalho('Dados pessoais')} />
       <Stack.Screen
         name="pedido-acesso"
-        options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
+        options={{ ...comCabecalho('Pedido de Acesso'), animation: 'slide_from_bottom', gestureEnabled: false }}
       />
     </Stack>
   );

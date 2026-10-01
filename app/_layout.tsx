@@ -18,7 +18,7 @@ import { ToastHost } from '@/src/components/anim/ToastHost';
 import { definirAoExpirarSessao } from '@/src/services/api';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { toast } from '@/src/store/toast.store';
-import { colors } from '@/src/theme';
+import { comCabecalho, opcoesStack } from '@/src/utils/navegacao';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -51,16 +51,17 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'fade',
-            contentStyle: { backgroundColor: colors.background },
-          }}
-        >
-          <Stack.Screen name="alterar-senha" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="exame/[id]" options={{ animation: 'slide_from_right' }} />
+        <StatusBar style="dark" hidden={false} animated />
+        <Stack screenOptions={{ ...opcoesStack, animation: 'fade' }}>
+          <Stack.Screen
+            name="alterar-senha"
+            options={{ ...comCabecalho('Alterar senha'), animation: 'slide_from_right' }}
+          />
+          <Stack.Screen name="formulario/[tipo]" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen
+            name="exame/[id]"
+            options={{ ...comCabecalho('Detalhe do Exame'), animation: 'slide_from_right' }}
+          />
         </Stack>
         <ToastHost />
       </SafeAreaProvider>

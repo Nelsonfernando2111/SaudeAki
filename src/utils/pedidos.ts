@@ -12,15 +12,6 @@ export function estadoEfetivo(p: Pick<PedidoAcesso, 'estado' | 'dataExpiracao'>)
   return p.estado;
 }
 
-/** Duração da sessão de acesso completo criada ao aprovar */
-export const DURACAO_SESSAO_MS = 30 * 60 * 1000;
-
-/** O médico ainda tem (provavelmente) sessão ativa graças a este pedido aprovado? */
-export function sessaoProvavelmenteAtiva(p: PedidoAcesso): boolean {
-  if (p.estado !== 'APROVADO' || !p.dataResposta) return false;
-  return Date.now() < new Date(p.dataResposta).getTime() + DURACAO_SESSAO_MS;
-}
-
 export const INFO_ESTADO: Record<
   EstadoPedido,
   { label: string; cor: string; fundo: string; icone: IconName }
@@ -51,12 +42,3 @@ export const INFO_ESTADO: Record<
   },
 };
 
-/** Um registo por paciente (o pedido mais recente), pela ordem da lista */
-export function pacientesRecentes(pedidos: PedidoAcesso[]): PedidoAcesso[] {
-  const vistos = new Set<string>();
-  return pedidos.filter((p) => {
-    if (vistos.has(p.pacienteId)) return false;
-    vistos.add(p.pacienteId);
-    return true;
-  });
-}

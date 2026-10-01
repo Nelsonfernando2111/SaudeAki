@@ -10,7 +10,6 @@ import { useTremor } from '@/src/components/anim/useTremor';
 import { Alerta } from '@/src/components/ui/Alerta';
 import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { Input } from '@/src/components/ui/Input';
 import { LinhaInfo } from '@/src/components/ui/LinhaInfo';
 import { Opcoes } from '@/src/components/ui/Opcoes';
@@ -133,7 +132,6 @@ export default function PerfilMedico() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Meu Perfil" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(350)} style={styles.identificacao}>

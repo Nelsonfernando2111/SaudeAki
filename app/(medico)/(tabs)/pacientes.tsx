@@ -1,18 +1,14 @@
 import { useState } from 'react';
-import { FlatList, Keyboard, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { SkeletonLista } from '@/src/components/anim/Skeleton';
 import { Tocavel } from '@/src/components/anim/Tocavel';
 import { useTremor } from '@/src/components/anim/useTremor';
-import { CartaoPedido } from '@/src/components/shared/CartaoPedido';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
+import { CartaoPacienteRecente } from '@/src/components/shared/CartaoPacienteRecente';
 import { Estado } from '@/src/components/ui/Estado';
-import { useRecurso } from '@/src/hooks/useRecurso';
-import { listarPedidos } from '@/src/services/pedido.service';
-import { pacientesRecentes } from '@/src/utils/pedidos';
+import { useRecentesStore } from '@/src/store/recentes.store';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
 const FORMATO_CODIGO = /^PAC-[A-Z0-9]{3,}$/;
@@ -23,12 +19,8 @@ export default function PesquisarPaciente() {
   const [erro, setErro] = useState<string | null>(null);
   const { estilo, tremer } = useTremor();
 
-  // A API não tem pesquisa por nome para médicos: os "recentes" vêm dos pedidos feitos
-  const recentes = useRecurso(
-    () => listarPedidos({ size: 50 }).then((p) => pacientesRecentes(p.content)),
-    [],
-    { aoFocar: true }
-  );
+  // A API não tem pesquisa por nome para médicos: os "recentes" ficam guardados no telemóvel
+  const recentes = useRecentesStore((s) => s.pacientes);
 
   function pesquisar() {
     const valor = codigo.trim().toUpperCase();
@@ -44,22 +36,13 @@ export default function PesquisarPaciente() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Pesquisar Paciente" />
 
       <FlatList
-        data={recentes.carregando ? [] : recentes.dados ?? []}
-        keyExtractor={(item) => String(item.id)}
+        data={recentes}
+        keyExtractor={(item) => item.codUnico}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.lista}
-        refreshControl={
-          <RefreshControl
-            refreshing={recentes.aAtualizar}
-            onRefresh={recentes.atualizar}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
         ListHeaderComponent={
           <View>
             <Animated.View style={[styles.pesquisa, !!erro && styles.pesquisaErro, estilo]}>
@@ -89,26 +72,22 @@ export default function PesquisarPaciente() {
             </Animated.View>
             {erro ? <Text style={styles.erro}>{erro}</Text> : null}
             <Text style={styles.ajuda}>
-              A ficha de emergência abre sem aprovação. O histórico completo precisa do consentimento do paciente.
+              Abre a ficha de emergência do paciente; a partir dela, o histórico completo. Os acessos ficam registados.
             </Text>
             <Text style={styles.subtitulo}>Pacientes recentes</Text>
           </View>
         }
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(280)}>
-            <CartaoPedido pedido={item} />
+            <CartaoPacienteRecente paciente={item} />
           </Animated.View>
         )}
         ListEmptyComponent={
-          recentes.carregando ? (
-            <SkeletonLista itens={3} />
-          ) : (
-            <Estado
-              icone="account-search-outline"
-              titulo="Sem pacientes recentes"
-              texto={recentes.erro?.message ?? 'Os pacientes a quem pedir acesso aparecem aqui.'}
-            />
-          )
+          <Estado
+            icone="account-search-outline"
+            titulo="Sem pacientes recentes"
+            texto="Os pacientes que abrir aparecem aqui."
+          />
         }
       />
     </View>

@@ -10,21 +10,19 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { BottomSheet } from '@/src/components/anim/BottomSheet';
 import { ItemDeslizavel } from '@/src/components/anim/ItemDeslizavel';
 import { Skeleton } from '@/src/components/anim/Skeleton';
 import { Tocavel } from '@/src/components/anim/Tocavel';
-import { FormAnexo } from '@/src/components/medico/FormAnexo';
-import { FormExame } from '@/src/components/medico/FormExame';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { Estado } from '@/src/components/ui/Estado';
 import { Etiqueta } from '@/src/components/ui/Etiqueta';
+import { useAbrirFicheiro } from '@/src/hooks/useAbrirFicheiro';
 import { useRecurso } from '@/src/hooks/useRecurso';
+import { VisualizadorImagem } from '@/src/components/ui/VisualizadorImagem';
 import { cabecalhoAutorizacao, paraErroApi } from '@/src/services/api';
 import {
   cancelarExame,
@@ -35,7 +33,7 @@ import {
 } from '@/src/services/exame.service';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { toast } from '@/src/store/toast.store';
-import { INFO_STATUS_EXAME, statusExame } from '@/src/utils/clinico';
+import { INFO_CLASSIFICACAO, INFO_STATUS_EXAME, NOMES_CATEGORIA_EXAME, statusExame } from '@/src/utils/clinico';
 import { formatarDataHora } from '@/src/utils/datas';
 import type { AnexoExame, Exame } from '@/src/types';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
@@ -50,8 +48,7 @@ export default function DetalheExame() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const eMedico = useSessaoStore((s) => !!s.medico);
 
-  const [editar, setEditar] = useState(false);
-  const [anexar, setAnexar] = useState(false);
+  const ficheiro = useAbrirFicheiro();
   const [aCancelar, setACancelar] = useState(false);
   const [imagemAberta, setImagemAberta] = useState<AnexoExame | null>(null);
   const [cabecalhos, setCabecalhos] = useState<Record<string, string>>({});
@@ -60,8 +57,8 @@ export default function DetalheExame() {
     cabecalhoAutorizacao().then(setCabecalhos);
   }, []);
 
-  const exame = useRecurso(() => obterExame(id), [id]);
-  const anexos = useRecurso(() => listarAnexos(id).catch(() => [] as AnexoExame[]), [id]);
+  const exame = useRecurso(() => obterExame(id), [id], { aoFocar: true });
+  const anexos = useRecurso(() => listarAnexos(id).catch(() => [] as AnexoExame[]), [id], { aoFocar: true });
 
   function confirmarCancelamento(e: Exame) {
     Alert.alert('Cancelar exame', 'O exame fica marcado como cancelado no histórico.', [
@@ -97,7 +94,6 @@ export default function DetalheExame() {
   if (exame.carregando) {
     return (
       <View style={styles.container}>
-        <Cabecalho titulo="Detalhe do Exame" voltar />
         <View style={styles.scroll}>
           <Skeleton largura="60%" altura={22} />
           <Skeleton largura="40%" altura={14} style={{ marginTop: 10 }} />
@@ -110,7 +106,6 @@ export default function DetalheExame() {
   if (!exame.dados) {
     return (
       <View style={styles.container}>
-        <Cabecalho titulo="Detalhe do Exame" voltar />
         <Estado
           icone={exame.erro?.status === 403 ? 'lock-outline' : 'file-alert-outline'}
           titulo={exame.erro?.status === 403 ? 'Acesso não autorizado' : 'Não foi possível abrir o exame'}
@@ -128,7 +123,6 @@ export default function DetalheExame() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Detalhe do Exame" voltar />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -149,13 +143,27 @@ export default function DetalheExame() {
           <Text style={styles.titulo}>{e.tipoExame}</Text>
           <View style={styles.etiquetas}>
             <Etiqueta texto={info.label} cor={info.cor} fundo={info.fundo} icone={info.icone} />
+            {e.categoria ? (
+              <Etiqueta texto={NOMES_CATEGORIA_EXAME[e.categoria]} cor={colors.primary} fundo={colors.primarySoft} />
+            ) : null}
+            {e.temResultadoAnormal ? (
+              <Etiqueta texto="Resultado anormal" cor={colors.error} fundo={colors.errorSoft} icone="alert-circle-outline" />
+            ) : null}
           </View>
+
+          {e.indicacaoClinica ? (
+            <View style={styles.indicacao}>
+              <Text style={styles.indicacaoLabel}>Indicação clínica</Text>
+              <Text style={styles.indicacaoTexto}>{e.indicacaoClinica}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.cartao}>
             <Linha icone="calendar-clock" label="Solicitado" valor={formatarDataHora(e.dataSolicitado)} />
             <Linha icone="calendar-check" label="Realizado" valor={formatarDataHora(e.dataRealizado)} />
             <Linha icone="stethoscope" label="Médico responsável" valor={e.medicoResponsavelNome ?? '—'} />
-            <Linha icone="hospital-building" label="Unidade sanitária" valor={e.unidadeSanitariaNome ?? '—'} ultima />
+            <Linha icone="hospital-building" label="Unidade sanitária" valor={e.unidadeSanitariaNome ?? '—'} ultima={!e.codigo} />
+            {e.codigo ? <Linha icone="barcode" label="Código" valor={e.codigo} ultima /> : null}
           </View>
         </Animated.View>
 
@@ -177,10 +185,19 @@ export default function DetalheExame() {
                     <Text style={styles.referencia}>Ref.: {r.valorReferencia}</Text>
                   ) : null}
                 </View>
-                <Text style={[styles.celula, styles.resultado, styles.direita]}>
-                  {r.valor}
-                  {r.unidadeMedida ? ` ${r.unidadeMedida}` : ''}
-                </Text>
+                <View style={[styles.celula, { alignItems: 'flex-end', gap: 4 }]}>
+                  <Text style={[styles.resultado, r.anormal && { color: colors.error }]}>
+                    {r.valor}
+                    {r.unidadeMedida ? ` ${r.unidadeMedida}` : ''}
+                  </Text>
+                  {r.classificacao ? (
+                    <Etiqueta
+                      texto={INFO_CLASSIFICACAO[r.classificacao].label}
+                      cor={INFO_CLASSIFICACAO[r.classificacao].cor}
+                      fundo={INFO_CLASSIFICACAO[r.classificacao].fundo}
+                    />
+                  ) : null}
+                </View>
               </View>
             ))}
           </Animated.View>
@@ -190,6 +207,32 @@ export default function DetalheExame() {
             <Text style={styles.semDadosTexto}>Ainda não há resultados lançados.</Text>
           </View>
         )}
+
+        {e.achados || e.conclusao || e.responsavelLaudoNome ? (
+          <>
+            <Text style={styles.secao}>Laudo</Text>
+            <Animated.View entering={FadeInDown.delay(120).duration(300)} style={styles.laudo}>
+              {e.achados ? (
+                <View>
+                  <Text style={styles.indicacaoLabel}>Achados</Text>
+                  <Text style={styles.indicacaoTexto}>{e.achados}</Text>
+                </View>
+              ) : null}
+              {e.conclusao ? (
+                <View>
+                  <Text style={styles.indicacaoLabel}>Conclusão</Text>
+                  <Text style={[styles.indicacaoTexto, { fontFamily: fontFamily.semibold }]}>{e.conclusao}</Text>
+                </View>
+              ) : null}
+              {e.responsavelLaudoNome ? (
+                <Text style={styles.laudoAssinatura}>
+                  {e.responsavelLaudoNome}
+                  {e.responsavelLaudoNumeroOrdem ? ` · ${e.responsavelLaudoNumeroOrdem}` : ''}
+                </Text>
+              ) : null}
+            </Animated.View>
+          </>
+        ) : null}
 
         <Text style={styles.secao}>Anexos</Text>
         {anexos.carregando ? (
@@ -213,8 +256,8 @@ export default function DetalheExame() {
                   >
                     <Tocavel
                       style={styles.anexo}
-                      disabled={!eImagem}
-                      onPress={() => setImagemAberta(a)}
+                      disabled={ficheiro.aAbrir}
+                      onPress={() => (eImagem ? setImagemAberta(a) : ficheiro.abrir(a.url))}
                     >
                       {eImagem ? (
                         <Image
@@ -234,9 +277,11 @@ export default function DetalheExame() {
                           {a.nomeArquivo} · {tamanhoLegivel(a.tamanhoBytes)}
                         </Text>
                       </View>
-                      {eImagem ? (
-                        <MaterialCommunityIcons name="magnify-plus-outline" size={20} color={colors.primary} />
-                      ) : null}
+                      <MaterialCommunityIcons
+                        name={eImagem ? 'magnify-plus-outline' : 'open-in-new'}
+                        size={20}
+                        color={colors.primary}
+                      />
                     </Tocavel>
                   </ItemDeslizavel>
                 </Animated.View>
@@ -247,8 +292,27 @@ export default function DetalheExame() {
 
         {podeEditar ? (
           <View style={styles.acoes}>
-            <Button titulo="Editar / lançar resultados" icone="pencil-outline" onPress={() => setEditar(true)} />
-            <Button titulo="Anexar foto ou PDF" icone="paperclip" variante="secundario" onPress={() => setAnexar(true)} />
+            <Button
+              titulo="Editar / lançar resultados"
+              icone="pencil-outline"
+              onPress={() =>
+                router.push({
+                  pathname: '/formulario/[tipo]',
+                  params: { tipo: 'exame', dados: JSON.stringify(e), pacienteNome: e.pacienteNome },
+                } as any)
+              }
+            />
+            <Button
+              titulo="Anexar foto ou PDF"
+              icone="paperclip"
+              variante="secundario"
+              onPress={() =>
+                router.push({
+                  pathname: '/formulario/[tipo]',
+                  params: { tipo: 'anexo', exameId: String(e.id), pacienteNome: e.pacienteNome },
+                } as any)
+              }
+            />
             <Button
               titulo="Cancelar exame"
               variante="perigoContorno"
@@ -259,28 +323,9 @@ export default function DetalheExame() {
         ) : null}
       </ScrollView>
 
-      <BottomSheet visivel={editar} aoFechar={() => setEditar(false)} titulo="Editar exame">
-        <FormExame
-          pacienteId={e.pacienteId}
-          inicial={e}
-          aoGuardar={(novo) => {
-            exame.setDados(novo);
-            setEditar(false);
-            toast.sucesso('Exame atualizado');
-          }}
-        />
-      </BottomSheet>
 
-      <BottomSheet visivel={anexar} aoFechar={() => setAnexar(false)} titulo="Anexar ao exame">
-        <FormAnexo
-          exameId={e.id}
-          aoAnexar={(novo) => {
-            anexos.setDados((lista) => [...(lista ?? []), novo]);
-            setAnexar(false);
-            toast.sucesso('Anexo enviado');
-          }}
-        />
-      </BottomSheet>
+
+      <VisualizadorImagem uri={ficheiro.imagemLocal} aoFechar={ficheiro.fecharImagem} />
 
       <Modal
         visible={!!imagemAberta}
@@ -330,7 +375,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
   titulo: { fontFamily: fontFamily.semibold, fontSize: 22, color: colors.primaryDark },
-  etiquetas: { flexDirection: 'row', marginTop: spacing.sm, marginBottom: spacing.lg },
+  etiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm, marginBottom: spacing.lg },
+  indicacao: {
+    backgroundColor: colors.primaryFaint,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  indicacaoLabel: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary },
+  indicacaoTexto: { fontFamily: fontFamily.regular, fontSize: 14, color: colors.text, marginTop: 2, lineHeight: 20 },
+  laudo: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  laudoAssinatura: {
+    fontFamily: fontFamily.medium,
+    fontSize: 13,
+    color: colors.primaryDark,
+    textAlign: 'right',
+  },
   cartao: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

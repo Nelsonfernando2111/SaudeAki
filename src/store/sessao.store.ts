@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import type { Medico, Paciente } from '@/src/types';
 import { terminarSessao } from '@/src/services/auth.service';
 import { limparSessao } from '@/src/utils/sessao';
+import { useAvisosStore } from './avisos.store';
+import { useRecentesStore } from './recentes.store';
+
+/** Apaga dados do utilizador anterior guardados no telemóvel */
+function limparDadosLocais() {
+  useRecentesStore.getState().limpar();
+  useAvisosStore.getState().definirPedidosPendentes([]);
+}
 
 interface SessaoState {
   paciente: Paciente | null;
@@ -21,10 +29,12 @@ export const useSessaoStore = create<SessaoState>((set) => ({
   definirMedico: (medico) => set({ medico }),
   sair: async () => {
     await terminarSessao();
+    limparDadosLocais();
     set({ paciente: null, medico: null });
   },
   limpar: async () => {
     await limparSessao();
+    limparDadosLocais();
     set({ paciente: null, medico: null });
   },
 }));

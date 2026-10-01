@@ -9,7 +9,6 @@ import { PulsoSucesso } from '@/src/components/anim/PulsoSucesso';
 import { Skeleton } from '@/src/components/anim/Skeleton';
 import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { useContagem } from '@/src/hooks/useContagem';
 import { useVoltar } from '@/src/hooks/useVoltar';
 import { paraErroApi } from '@/src/services/api';
@@ -34,15 +33,15 @@ const RESULTADOS: Record<
     icone: 'check',
     cor: colors.success,
     fundo: colors.successSoft,
-    titulo: 'Acesso aprovado',
-    texto: (m) => `${m} pode ver o seu histórico completo durante 30 minutos. Pode revogar a qualquer momento em "Acessos".`,
+    titulo: 'Pedido confirmado',
+    texto: (m) => `Confirmou o pedido de ${m}. Todas as consultas ao seu histórico ficam registadas em "Acessos".`,
   },
   RECUSADO: {
     icone: 'close',
     cor: colors.error,
     fundo: colors.errorSoft,
-    titulo: 'Acesso recusado',
-    texto: (m) => `${m} não terá acesso ao seu histórico completo.`,
+    titulo: 'Pedido recusado',
+    texto: (m) => `A sua recusa ficou registada. As consultas de ${m} ao seu histórico continuam a aparecer em "Acessos".`,
   },
   EXPIRADO: {
     icone: 'clock-alert-outline',
@@ -128,7 +127,6 @@ export default function PedidoAcessoTela() {
     const r = RESULTADOS[resultado];
     return (
       <View style={styles.container}>
-        <Cabecalho titulo="Pedido de Acesso" voltar={fechar} />
         <View style={[styles.resultado, { paddingBottom: insets.bottom + spacing.xl }]}>
           <PulsoSucesso icone={r.icone} cor={r.cor} fundo={r.fundo} />
           <Animated.Text entering={FadeInDown.delay(150)} style={styles.resultadoTitulo}>
@@ -149,7 +147,6 @@ export default function PedidoAcessoTela() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Pedido de Acesso" voltar={fechar} />
 
       <View style={[styles.corpo, { paddingBottom: insets.bottom + spacing.xl }]}>
         {!pedido ? (
@@ -172,13 +169,13 @@ export default function PedidoAcessoTela() {
                 </View>
               </View>
             </View>
-            <Text style={styles.descricao}>Solicita acesso completo ao seu histórico clínico.</Text>
+            <Text style={styles.descricao}>Pede a sua confirmação para consultar o seu histórico clínico.</Text>
           </Animated.View>
         )}
 
         <Text style={styles.consentimento}>
-          Se aprovar, o médico poderá ver e registar dados no seu histórico durante 30 minutos. A
-          ficha de emergência continua sempre disponível.
+          Os médicos podem consultar o seu histórico sem autorização; este pedido serve para
+          confirmar que está informado. Cada consulta fica registada em &quot;Acessos&quot;.
         </Text>
 
         <View style={{ flex: 1 }} />

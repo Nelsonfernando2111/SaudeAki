@@ -32,8 +32,10 @@ import { entrar, registarPaciente } from '@/src/services/auth.service';
 import { obterMeuPerfil } from '@/src/services/paciente.service';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { toast } from '@/src/store/toast.store';
-import { dataParaApi } from '@/src/utils/datas';
-import type { DadosRegisto, FatorRh, GrupoSanguineo } from '@/src/types';
+import { dataNoPassado, dataParaApi } from '@/src/utils/datas';
+import { TIPOS_DOCUMENTO } from '@/src/utils/clinico';
+import { SeletorArquivo } from '@/src/components/ui/SeletorArquivo';
+import type { ArquivoLocal, DadosRegisto, FatorRh, GrupoSanguineo, TipoDocumento } from '@/src/types';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
 /* ---------- Validação ---------- */
@@ -54,16 +56,32 @@ const registoSchema = z
     confirmar: z.string().min(1, 'Confirme a senha'),
     dataNascimento: z
       .string()
-      .refine((v) => !v.trim() || dataParaApi(v) !== null, 'Use o formato dd/mm/aaaa'),
-    genero: z.string().nullable(),
+      .min(1, 'Informe a data de nascimento')
+      .refine((v) => dataParaApi(v) !== null, 'Use o formato dd/mm/aaaa')
+      .refine((v) => dataNoPassado(v), 'A data tem de ser no passado'),
+    genero: z.string({ message: 'Escolha o sexo' }).nullable().refine((v) => !!v, 'Escolha o sexo'),
+    contactoEmergencia: z
+      .string()
+      .transform((v) => v.replace(/\s/g, ''))
+      .refine((v) => /^\+?\d{9,}$/.test(v), 'Contacto de emergência inválido'),
     cidade: z.string(),
-    contactoEmergencia: z.string(),
     grupoSanguineo: z.enum(['A', 'B', 'AB', 'O']).nullable(),
     fatorRh: z.enum(['POSITIVO', 'NEGATIVO']).nullable(),
+    tipoDocumento: z.enum(['BI', 'PASSAPORTE', 'DIRE', 'CARTA_CONDUCAO', 'CARTAO_ELEITOR', 'OUTRO']).nullable(),
+    numeroDocumento: z.string(),
   })
   .refine((d) => d.senha === d.confirmar, {
     message: 'As senhas não coincidem',
     path: ['confirmar'],
+  })
+  // O tipo e o número do documento vêm sempre juntos
+  .refine((d) => !d.tipoDocumento || d.numeroDocumento.trim().length > 0, {
+    message: 'Informe o número do documento',
+    path: ['numeroDocumento'],
+  })
+  .refine((d) => !!d.tipoDocumento || d.numeroDocumento.trim().length === 0, {
+    message: 'Escolha o tipo de documento',
+    path: ['tipoDocumento'],
   });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -90,6 +108,8 @@ export default function LoginPaciente() {
   /** Depois do registo: mostra o código gerado antes de entrar */
   const [registado, setRegistado] = useState<{ codUnico: string; senha: string } | null>(null);
   const [aEntrar, setAEntrar] = useState(false);
+  /** Foto/PDF opcional do documento de identidade (envia o registo em multipart) */
+  const [documento, setDocumento] = useState<ArquivoLocal | null>(null);
 
   const formLogin = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -109,6 +129,8 @@ export default function LoginPaciente() {
       contactoEmergencia: '',
       grupoSanguineo: null,
       fatorRh: null,
+      tipoDocumento: null,
+      numeroDocumento: '',
     },
   });
 
@@ -134,19 +156,26 @@ export default function LoginPaciente() {
   const aoRegistar = formRegisto.handleSubmit(
     async (d) => {
       setErroGeral(null);
+      if (documento && !d.tipoDocumento) {
+        setErroGeral('Para anexar o documento, indique o tipo e o número.');
+        tremer();
+        return;
+      }
       const corpo: DadosRegisto = {
         nomeCompleto: d.nomeCompleto.trim(),
         telefone: d.telefone,
         senha: d.senha,
-        dataNascimento: dataParaApi(d.dataNascimento) ?? undefined,
-        genero: d.genero ?? undefined,
+        dataNascimento: dataParaApi(d.dataNascimento) ?? '',
+        genero: d.genero ?? '',
+        contactoEmergencia: d.contactoEmergencia,
         cidade: d.cidade.trim() || undefined,
-        contactoEmergencia: d.contactoEmergencia.replace(/\s/g, '') || undefined,
         grupoSanguineo: d.grupoSanguineo ?? undefined,
         fatorRh: d.fatorRh ?? undefined,
+        tipoDocumento: d.tipoDocumento ?? undefined,
+        numeroDocumento: d.numeroDocumento.trim().toUpperCase() || undefined,
       };
       try {
-        const paciente = await registarPaciente(corpo);
+        const paciente = await registarPaciente(corpo, documento);
         setRegistado({ codUnico: paciente.codUnico, senha: d.senha });
       } catch (e) {
         setErroGeral(paraErroApi(e).message);
@@ -358,60 +387,63 @@ export default function LoginPaciente() {
                 )}
               />
 
+              <Controller
+                control={formRegisto.control}
+                name="dataNascimento"
+                render={({ field, fieldState }) => (
+                  <Input
+                    label="Data de nascimento"
+                    icone="cake-variant-outline"
+                    placeholder="dd/mm/aaaa"
+                    keyboardType="numbers-and-punctuation"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    onBlur={field.onBlur}
+                    erro={fieldState.error?.message}
+                  />
+                )}
+              />
+              <Controller
+                control={formRegisto.control}
+                name="genero"
+                render={({ field, fieldState }) => (
+                  <Opcoes
+                    label="Sexo"
+                    opcoes={[
+                      { valor: 'F', titulo: 'Feminino' },
+                      { valor: 'M', titulo: 'Masculino' },
+                    ]}
+                    valor={field.value}
+                    onMudar={field.onChange}
+                    erro={fieldState.error?.message}
+                  />
+                )}
+              />
+              <Controller
+                control={formRegisto.control}
+                name="contactoEmergencia"
+                render={({ field, fieldState }) => (
+                  <Input
+                    label="Contacto de emergência"
+                    icone="phone-alert-outline"
+                    placeholder="84 999 9999"
+                    keyboardType="phone-pad"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    onBlur={field.onBlur}
+                    erro={fieldState.error?.message}
+                  />
+                )}
+              />
+
               <View style={styles.opcionais}>
-                <Expansivel
-                  titulo="Mais dados (opcional)"
-                  subtitulo="Pode preencher depois no seu perfil"
-                >
+                <Expansivel titulo="Mais dados (opcional)" subtitulo="Cidade e tipo sanguíneo">
                   <View style={{ paddingTop: spacing.sm }}>
-                    <Controller
-                      control={formRegisto.control}
-                      name="dataNascimento"
-                      render={({ field, fieldState }) => (
-                        <Input
-                          label="Data de nascimento"
-                          placeholder="dd/mm/aaaa"
-                          keyboardType="numbers-and-punctuation"
-                          value={field.value}
-                          onChangeText={field.onChange}
-                          erro={fieldState.error?.message}
-                        />
-                      )}
-                    />
-                    <Controller
-                      control={formRegisto.control}
-                      name="genero"
-                      render={({ field }) => (
-                        <Opcoes
-                          label="Género"
-                          limpavel
-                          opcoes={[
-                            { valor: 'F', titulo: 'Feminino' },
-                            { valor: 'M', titulo: 'Masculino' },
-                          ]}
-                          valor={field.value}
-                          onMudar={field.onChange}
-                        />
-                      )}
-                    />
                     <Controller
                       control={formRegisto.control}
                       name="cidade"
                       render={({ field }) => (
                         <Input label="Cidade" placeholder="Ex.: Maputo" value={field.value} onChangeText={field.onChange} />
-                      )}
-                    />
-                    <Controller
-                      control={formRegisto.control}
-                      name="contactoEmergencia"
-                      render={({ field }) => (
-                        <Input
-                          label="Contacto de emergência"
-                          placeholder="84 999 9999"
-                          keyboardType="phone-pad"
-                          value={field.value}
-                          onChangeText={field.onChange}
-                        />
                       )}
                     />
                     <Controller
@@ -442,6 +474,52 @@ export default function LoginPaciente() {
                           onMudar={field.onChange}
                         />
                       )}
+                    />
+                  </View>
+                </Expansivel>
+              </View>
+
+              <View style={styles.opcionais}>
+                <Expansivel titulo="Documento de identidade (opcional)" subtitulo="Tipo, número e foto ou PDF">
+                  <View style={{ paddingTop: spacing.sm }}>
+                    <Controller
+                      control={formRegisto.control}
+                      name="tipoDocumento"
+                      render={({ field, fieldState }) => (
+                        <Opcoes<TipoDocumento>
+                          label="Tipo de documento"
+                          limpavel
+                          opcoes={TIPOS_DOCUMENTO}
+                          valor={field.value}
+                          onMudar={field.onChange}
+                          erro={fieldState.error?.message}
+                        />
+                      )}
+                    />
+                    <Controller
+                      control={formRegisto.control}
+                      name="numeroDocumento"
+                      render={({ field, fieldState }) => (
+                        <Input
+                          label="Número do documento"
+                          placeholder="Ex.: 110100123456A"
+                          autoCapitalize="characters"
+                          value={field.value}
+                          onChangeText={field.onChange}
+                          erro={fieldState.error?.message}
+                        />
+                      )}
+                    />
+                    <SeletorArquivo
+                      valor={documento}
+                      onMudar={(a) => {
+                        setErroGeral(null);
+                        setDocumento(a);
+                      }}
+                      onErro={(m) => {
+                        setErroGeral(m);
+                        tremer();
+                      }}
                     />
                   </View>
                 </Expansivel>

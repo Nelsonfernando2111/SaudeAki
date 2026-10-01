@@ -1,5 +1,5 @@
 import { api, ErroApi } from './api';
-import type { DadosRegisto, Paciente, Perfil, RespostaLogin, Role } from '@/src/types';
+import type { ArquivoLocal, DadosRegisto, Paciente, Perfil, RespostaLogin, Role } from '@/src/types';
 import { guardarSessao, limparSessao } from '@/src/utils/sessao';
 
 /* Secção 2 da API: autenticação */
@@ -43,9 +43,21 @@ export async function entrar(
   return data;
 }
 
-/** POST /auth/registo — devolve o paciente com o código único gerado */
-export async function registarPaciente(dados: DadosRegisto): Promise<Paciente> {
-  const { data } = await api.post<Paciente>('/auth/registo', dados);
+/**
+ * POST /auth/registo — devolve o paciente com o código único gerado.
+ * Com o ficheiro do documento de identidade, envia em multipart (um campo por valor).
+ */
+export async function registarPaciente(dados: DadosRegisto, documento?: ArquivoLocal | null): Promise<Paciente> {
+  if (!documento) {
+    const { data } = await api.post<Paciente>('/auth/registo', dados);
+    return data;
+  }
+  const corpo = new FormData();
+  Object.entries(dados).forEach(([campo, valor]) => {
+    if (valor !== undefined && valor !== null && valor !== '') corpo.append(campo, String(valor));
+  });
+  corpo.append('documento', { uri: documento.uri, name: documento.nome, type: documento.tipo } as any);
+  const { data } = await api.post<Paciente>('/auth/registo', corpo, { timeout: 120000 });
   return data;
 }
 

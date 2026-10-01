@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { ColorValue, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CabecalhoApp } from '@/src/components/ui/CabecalhoApp';
 import { colors, fontFamily } from '@/src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -18,7 +19,10 @@ export default function MedicoTabs() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        header: ({ options, route }) => (
+          <CabecalhoApp titulo={options.title} logo={route.name === 'index'} />
+        ),
         animation: 'shift',
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
@@ -35,15 +39,11 @@ export default function MedicoTabs() {
       <Tabs.Screen name="index" options={{ title: 'Início', tabBarIcon: icone('home', 'home-outline') }} />
       <Tabs.Screen
         name="pacientes"
-        options={{ title: 'Pacientes', tabBarIcon: icone('account-search', 'account-search-outline') }}
-      />
-      <Tabs.Screen
-        name="pedidos"
-        options={{ title: 'Pedidos', tabBarIcon: icone('clipboard-clock', 'clipboard-clock-outline') }}
+        options={{ title: 'Pesquisar Paciente', tabBarLabel: 'Pacientes', tabBarIcon: icone('account-search', 'account-search-outline') }}
       />
       <Tabs.Screen
         name="perfil"
-        options={{ title: 'Perfil', tabBarIcon: icone('account', 'account-outline') }}
+        options={{ title: 'Meu Perfil', tabBarLabel: 'Perfil', tabBarIcon: icone('account', 'account-outline') }}
       />
     </Tabs>
   );

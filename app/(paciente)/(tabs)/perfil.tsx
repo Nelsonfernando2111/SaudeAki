@@ -5,7 +5,6 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
-import { Cabecalho } from '@/src/components/ui/Cabecalho';
 import { LinhaInfo } from '@/src/components/ui/LinhaInfo';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { tipoSanguineo } from '@/src/utils/clinico';
@@ -34,13 +33,15 @@ export default function Perfil() {
 
   return (
     <View style={styles.container}>
-      <Cabecalho titulo="Meu Perfil" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(350)} style={styles.identificacao}>
           <Avatar nome={paciente?.nomeCompleto} tamanho={96} />
           <Text style={styles.nome}>{paciente?.nomeCompleto ?? '—'}</Text>
-          <Text style={styles.codigo}>{paciente?.codUnico}</Text>
+          <Text style={styles.codigo}>
+            {paciente?.codUnico}
+            {paciente?.idade != null ? ` · ${paciente.idade} anos` : ''}
+          </Text>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(80).duration(350)} style={styles.cartao}>

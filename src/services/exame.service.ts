@@ -1,10 +1,7 @@
-import { api, SERVIDOR_URL } from './api';
-import type { AnexoExame, DadosExame, Exame } from '@/src/types';
+import { api, obterLinkTemporario, SERVIDOR_URL } from './api';
+import type { AnexoExame, ArquivoLocal, DadosExame, Exame } from '@/src/types';
 
 /* Secção 7 da API: exames e anexos */
-
-export const TAMANHO_MAXIMO_ANEXO = 5 * 1024 * 1024;
-export const TIPOS_ANEXO = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
 export async function registarExame(pacienteId: string, dados: DadosExame): Promise<Exame> {
   const { data } = await api.post<Exame>(
@@ -40,7 +37,7 @@ export async function listarAnexos(exameId: number | string): Promise<AnexoExame
 /** Anexa JPEG, PNG, WebP ou PDF (máx. 5 MB) — `uri` vem do seletor de ficheiros */
 export async function anexarArquivo(
   exameId: number,
-  arquivo: { uri: string; nome: string; tipo: string },
+  arquivo: ArquivoLocal,
   descricao?: string,
   aoProgresso?: (fracao: number) => void
 ): Promise<AnexoExame> {
@@ -59,6 +56,11 @@ export async function anexarArquivo(
 
 export async function removerAnexo(fotoId: number): Promise<void> {
   await api.delete(`/exames/fotos/${fotoId}`);
+}
+
+/** Link assinado do Cloudinary (5 min), para abrir PDFs no navegador */
+export function linkAnexo(anexo: AnexoExame) {
+  return obterLinkTemporario(anexo.url);
 }
 
 /** URL absoluta do ficheiro (pedir com o cabeçalho Authorization) */

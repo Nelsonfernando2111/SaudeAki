@@ -104,8 +104,11 @@ export function BottomSheet({ visivel, aoFechar, titulo, children }: BottomSheet
               </View>
             </GestureDetector>
 
+            {/* flexShrink: sem isto o ScrollView cresce além da folha e o botão final fica inacessível */}
             <ScrollView
+              style={styles.rolagem}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.conteudo}
             >
@@ -142,5 +145,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   titulo: { fontFamily: fontFamily.semibold, fontSize: 18, color: colors.primaryDark },
-  conteudo: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
+  rolagem: { flexShrink: 1 },
+  conteudo: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
 });

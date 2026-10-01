@@ -8,9 +8,12 @@ import { Expansivel } from '@/src/components/anim/Expansivel';
 import { ItemDeslizavel } from '@/src/components/anim/ItemDeslizavel';
 import { Tocavel } from '@/src/components/anim/Tocavel';
 import { AbasPilula } from '@/src/components/ui/AbasPilula';
+import { Destaques } from '@/src/components/ui/Destaques';
 import { Etiqueta } from '@/src/components/ui/Etiqueta';
 import {
   dataExame,
+  INFO_CONDUTA,
+  INFO_ESTADO_CONDICAO,
   INFO_SEVERIDADE,
   INFO_STATUS_EXAME,
   posologia,
@@ -108,8 +111,11 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
   const [aba, setAba] = useState<Aba>('resumo');
   const { paciente, condicoes, exames, prescricoes } = historico;
 
-  const alergias = condicoes.filter((c) => c.tipo === 'ALERGIA');
-  const cronicas = condicoes.filter((c) => c.tipo === 'DOENCA_CRONICA');
+  // Resolvidas vão para o fim de cada lista
+  const porEstado = (a: CondicaoMedica, b: CondicaoMedica) =>
+    Number(a.estado === 'RESOLVIDA') - Number(b.estado === 'RESOLVIDA');
+  const alergias = condicoes.filter((c) => c.tipo === 'ALERGIA').sort(porEstado);
+  const cronicas = condicoes.filter((c) => c.tipo === 'DOENCA_CRONICA').sort(porEstado);
   const ativas = prescricoes.filter((p) => p.ativa);
   const encerradas = prescricoes.filter((p) => !p.ativa);
   const examesOrdenados = [...exames].sort((a, b) => dataExame(b).localeCompare(dataExame(a)));
@@ -119,6 +125,16 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
   const renderCondicao = (c: CondicaoMedica, i: number) => {
     const sev = INFO_SEVERIDADE[c.severidade];
     const alergia = c.tipo === 'ALERGIA';
+    const estado = c.estado ?? 'ATIVA';
+    const resolvida = estado === 'RESOLVIDA';
+    const detalhes = [
+      c.codigoCid ? `CID ${c.codigoCid}` : null,
+      alergia && c.agente ? `Agente: ${c.agente}` : null,
+      alergia && c.reacaoObservada ? `Reação: ${c.reacaoObservada}` : null,
+      c.dataInicio ? `Desde ${formatarData(c.dataInicio)}` : null,
+    ].filter(Boolean);
+    const conduta = alergia && c.conduta ? INFO_CONDUTA[c.conduta] : null;
+    const infoEstado = INFO_ESTADO_CONDICAO[estado];
     return (
       <Animated.View key={c.id} entering={entrada(i)} exiting={FadeOut} layout={LinearTransition}>
         <ItemDeslizavel
@@ -127,16 +143,31 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
           desativado={!edicao}
           onAcao={() => edicao?.aoRemoverCondicao(c)}
         >
-          <View style={styles.fundoItem}>
+          <View style={[styles.fundoItem, resolvida && { opacity: 0.6 }]}>
             <Linha
               icone={alergia ? 'flower-pollen-outline' : 'heart-pulse'}
               cor={alergia ? colors.error : colors.success}
               fundo={alergia ? colors.errorSoft : colors.successSoft}
               principal={c.descricao}
-              secundario={`Registado em ${formatarData(c.registradoEm)}`}
+              secundario={[
+                detalhes.join(' · ') || null,
+                `Registado em ${formatarData(c.registradoEm)}${c.registadoPorNome ? ` por ${c.registadoPorNome}` : ''}`,
+              ]
+                .filter(Boolean)
+                .join('\n')}
               direita={<Etiqueta texto={sev.label} cor={sev.cor} fundo={sev.fundo} />}
               onPress={edicao ? () => edicao.aoEditarCondicao(c) : undefined}
             />
+            {conduta || estado !== 'ATIVA' ? (
+              <View style={styles.etiquetasCondicao}>
+                {estado !== 'ATIVA' ? (
+                  <Etiqueta texto={infoEstado.label} cor={infoEstado.cor} fundo={infoEstado.fundo} />
+                ) : null}
+                {conduta ? (
+                  <Etiqueta texto={conduta.label} cor={conduta.cor} fundo={conduta.fundo} icone="shield-alert-outline" />
+                ) : null}
+              </View>
+            ) : null}
           </View>
         </ItemDeslizavel>
       </Animated.View>
@@ -186,6 +217,17 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
       {/* ---------- RESUMO ---------- */}
       {aba === 'resumo' && (
         <Animated.View key="resumo" entering={FadeInDown.duration(250)} style={styles.conteudo}>
+          <Destaques
+            itens={[
+              ...(historico.diabetico ? [{ icone: 'diabetes' as const, texto: 'Diabético', alerta: true }] : []),
+              ...(alergias.some((a) => a.severidade === 'CRITICA')
+                ? [{ icone: 'alert-octagon-outline' as const, texto: 'Alergia crítica', alerta: true }]
+                : []),
+              ...((historico.temMedicacaoAtiva ?? ativas.length > 0)
+                ? [{ icone: 'pill' as const, texto: `${historico.medicacaoAtiva?.length ?? ativas.length} medicamento(s) ativo(s)` }]
+                : []),
+            ]}
+          />
           <View style={styles.sangue}>
             <MaterialCommunityIcons name="water" size={22} color={colors.error} />
             <Text style={styles.sangueLabel}>Tipo sanguíneo</Text>
@@ -249,7 +291,14 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
                     fundo={colors.primarySoft}
                     principal={e.tipoExame}
                     secundario={[formatarData(dataExame(e)), e.unidadeSanitariaNome].filter(Boolean).join(' · ')}
-                    direita={<Etiqueta texto={info.label} cor={info.cor} fundo={info.fundo} />}
+                    direita={
+                      <View style={styles.etiquetasExame}>
+                        <Etiqueta texto={info.label} cor={info.cor} fundo={info.fundo} />
+                        {e.temResultadoAnormal ? (
+                          <Etiqueta texto="Anormal" cor={colors.error} fundo={colors.errorSoft} icone="alert-circle-outline" />
+                        ) : null}
+                      </View>
+                    }
                     onPress={() => abrirExame(e.id)}
                   />
                 </Animated.View>
@@ -313,6 +362,8 @@ const styles = StyleSheet.create({
   },
   itens: { paddingBottom: spacing.sm, gap: 2 },
   fundoItem: { backgroundColor: colors.surface },
+  etiquetasCondicao: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginLeft: 50, marginTop: -4, marginBottom: spacing.sm },
+  etiquetasExame: { alignItems: 'flex-end', gap: 4 },
   cartaoItem: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

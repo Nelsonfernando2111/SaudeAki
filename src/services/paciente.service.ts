@@ -1,5 +1,6 @@
-import { api } from './api';
+import { api, obterLinkTemporario } from './api';
 import type {
+  ArquivoLocal,
   AtualizacaoPaciente,
   CondicaoMedica,
   Exame,
@@ -24,6 +25,33 @@ export async function obterMeuPerfil(): Promise<Paciente> {
 export async function atualizarMeuPerfil(dados: AtualizacaoPaciente): Promise<Paciente> {
   const { data } = await api.put<Paciente>('/pacientes/me', dados);
   return data;
+}
+
+/* ---------- Documento de identidade ---------- */
+
+/** Envia ou substitui o ficheiro do documento (JPEG, PNG, WebP ou PDF, máx. 5 MB) */
+export async function enviarDocumentoIdentidade(arquivo: ArquivoLocal): Promise<Paciente> {
+  const corpo = new FormData();
+  corpo.append('documento', { uri: arquivo.uri, name: arquivo.nome, type: arquivo.tipo } as any);
+  const { data } = await api.put<Paciente>('/pacientes/me/documento-identidade', corpo, { timeout: 120000 });
+  return data;
+}
+
+/** Remove só o ficheiro; o tipo e o número ficam no perfil */
+export async function removerDocumentoIdentidade(): Promise<void> {
+  await api.delete('/pacientes/me/documento-identidade');
+}
+
+/** Caminho do ficheiro: o meu (sem id) ou o de um paciente (médico; fica na auditoria) */
+export function caminhoDocumentoIdentidade(pacienteId?: string): string {
+  return pacienteId
+    ? `/api/pacientes/${encodeURIComponent(pacienteId)}/documento-identidade`
+    : '/api/pacientes/me/documento-identidade';
+}
+
+/** Link temporário (5 min) para ver o documento, ou null sem Cloudinary */
+export function linkDocumentoIdentidade(pacienteId?: string) {
+  return obterLinkTemporario(caminhoDocumentoIdentidade(pacienteId));
 }
 
 /** Regista o token FCM do telemóvel para receber pedidos de acesso por push */
