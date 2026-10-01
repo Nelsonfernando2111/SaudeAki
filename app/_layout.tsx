@@ -57,6 +57,7 @@ export default function RootLayout() {
             name="alterar-senha"
             options={{ ...comCabecalho('Alterar senha'), animation: 'slide_from_right' }}
           />
+          
           <Stack.Screen name="formulario/[tipo]" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen
             name="exame/[id]"

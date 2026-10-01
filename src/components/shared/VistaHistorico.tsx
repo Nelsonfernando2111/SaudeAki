@@ -51,6 +51,8 @@ interface Props {
   edicao?: AcoesEdicao;
   /** Conteúdo acima das abas (ex.: identificação, tempo de sessão) */
   topo?: React.ReactNode;
+  /** Conteúdo no fim da página, abaixo de qualquer aba (ex.: exportar PDF) */
+  rodape?: React.ReactNode;
 }
 
 const entrada = (i: number) => FadeInDown.delay(Math.min(i, 8) * 45).duration(300);
@@ -106,7 +108,7 @@ function Vazio({ texto }: { texto: string }) {
   return <Text style={styles.vazio}>{texto}</Text>;
 }
 
-export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, topo }: Props) {
+export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, topo, rodape }: Props) {
   const router = useRouter();
   const [aba, setAba] = useState<Aba>('resumo');
   const { paciente, condicoes, exames, prescricoes } = historico;
@@ -327,6 +329,8 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
           ) : null}
         </Animated.View>
       )}
+
+      {rodape ? <View style={styles.rodape}>{rodape}</View> : null}
     </ScrollView>
   );
 }
@@ -334,6 +338,7 @@ export function VistaHistorico({ historico, aAtualizar, aoAtualizar, edicao, top
 const styles = StyleSheet.create({
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
   conteudo: { marginTop: spacing.lg, gap: spacing.md },
+  rodape: { marginTop: spacing.xl },
   sangue: {
     flexDirection: 'row',
     alignItems: 'center',

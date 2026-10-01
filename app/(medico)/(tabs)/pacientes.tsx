@@ -74,6 +74,29 @@ export default function PesquisarPaciente() {
             <Text style={styles.ajuda}>
               Abre a ficha de emergência do paciente; a partir dela, o histórico completo. Os acessos ficam registados.
             </Text>
+            <Text style={styles.ou}>O paciente não consegue dizer o código?</Text>
+            <View style={styles.biometria}>
+              {(
+                [
+                  { modo: 'digital', icone: 'fingerprint', titulo: 'Impressão digital' },
+                  { modo: 'facial', icone: 'face-recognition', titulo: 'Face ID' },
+                ] as const
+              ).map((b) => (
+                <Tocavel
+                  key={b.modo}
+                  style={styles.opcaoBiometria}
+                  onPress={() => router.push({ pathname: '/(medico)/biometria', params: { modo: b.modo } } as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Identificar por ${b.titulo} (brevemente)`}
+                >
+                  <MaterialCommunityIcons name={b.icone} size={30} color={colors.primary} />
+                  <Text style={styles.opcaoTitulo}>{b.titulo}</Text>
+                  <Text style={styles.opcaoEmBreve}>Brevemente</Text>
+                </Tocavel>
+              ))}
+            </View>
+
+
             <Text style={styles.subtitulo}>Pacientes recentes</Text>
           </View>
         }
@@ -120,6 +143,27 @@ const styles = StyleSheet.create({
   },
   erro: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.error, marginTop: 6 },
   ajuda: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, marginTop: spacing.sm, lineHeight: 17 },
+  ou: {
+    fontFamily: fontFamily.medium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  biometria: { flexDirection: 'row', gap: spacing.md },
+  opcaoBiometria: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryFaint,
+  },
+  opcaoTitulo: { fontFamily: fontFamily.semibold, fontSize: 13, color: colors.primaryDark },
+  opcaoEmBreve: { fontFamily: fontFamily.medium, fontSize: 11, color: colors.purple },
   subtitulo: {
     fontFamily: fontFamily.semibold,
     fontSize: 15,

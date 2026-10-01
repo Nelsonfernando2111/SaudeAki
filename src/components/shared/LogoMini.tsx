@@ -12,7 +12,7 @@ export function LogoMini() {
         </View>
       </View>
       <View>
-        <Text style={styles.nome}>IDCLIN</Text>
+        <Text style={styles.nome}>SAUDEID</Text>
         <Text style={styles.slogan}>A sua saúde, em boas mãos</Text>
       </View>
     </View>

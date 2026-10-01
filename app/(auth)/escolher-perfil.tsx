@@ -5,6 +5,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tocavel } from '@/src/components/anim/Tocavel';
 import { Logo } from '@/src/components/shared/Logo';
+import { obterSessao } from '@/src/utils/sessao';
+import type { Perfil } from '@/src/types';
 import { colors, fontFamily, radius, sombra, spacing } from '@/src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -42,6 +44,16 @@ export default function EscolherPerfil() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  /** Com sessão guardada do mesmo perfil entra direto; senão vai para o login */
+  async function escolher(perfil: Perfil) {
+    const sessao = await obterSessao();
+    if (sessao?.perfil === perfil) {
+      router.replace(perfil === 'medico' ? '/(medico)/(tabs)' : ('/(paciente)/(tabs)' as any));
+    } else {
+      router.push(perfil === 'medico' ? '/(auth)/login-medico' : ('/(auth)/login-paciente' as any));
+    }
+  }
+
   return (
     <View
       style={[
@@ -67,7 +79,7 @@ export default function EscolherPerfil() {
               icone="stethoscope"
               titulo="Sou Médico"
               descricao="Acesso seguro para profissionais de saúde"
-              onPress={() => router.push('/(auth)/login-medico' as any)}
+              onPress={() => escolher('medico')}
             />
           </Animated.View>
           <Animated.View entering={FadeInDown.delay(300).duration(450)}>
@@ -75,7 +87,7 @@ export default function EscolherPerfil() {
               icone="account-heart-outline"
               titulo="Sou Paciente"
               descricao="Consulte e controle o seu histórico clínico"
-              onPress={() => router.push('/(auth)/login-paciente' as any)}
+              onPress={() => escolher('paciente')}
             />
           </Animated.View>
         </View>

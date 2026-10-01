@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -182,6 +182,26 @@ export default function FichaPaciente() {
         <Animated.View entering={FadeInDown.delay(300).duration(300)}>
           <CartaoDocumento pacienteId={id} />
         </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(360).duration(300)} style={styles.contacto}>
+          <View style={styles.topo}>
+            <View style={styles.contactoIcone}>
+              <MaterialCommunityIcons name="phone-alert-outline" size={22} color={colors.error} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.contactoTitulo}>Contacto de emergência</Text>
+              <Text style={styles.itemSub}>{f.contactoEmergencia || 'Não indicado'}</Text>
+            </View>
+          </View>
+          {f.contactoEmergencia ? (
+            <Button
+              titulo="Ligar"
+              icone="phone-outline"
+              variante="secundario"
+              onPress={() => Linking.openURL(`tel:${f.contactoEmergencia}`)}
+            />
+          ) : null}
+        </Animated.View>
       </ScrollView>
 
       <View style={[styles.rodape, { paddingBottom: insets.bottom + spacing.lg }]}>
@@ -237,6 +257,24 @@ const styles = StyleSheet.create({
   itemTexto: { flex: 1, fontFamily: fontFamily.medium, fontSize: 14, color: colors.text },
   itemSub: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   vazio: { fontFamily: fontFamily.regular, fontSize: 13, color: colors.textSecondary, paddingBottom: spacing.md },
+  contacto: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  topo: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  contactoIcone: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.errorSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactoTitulo: { fontFamily: fontFamily.semibold, fontSize: 15, color: colors.text },
   rodape: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,

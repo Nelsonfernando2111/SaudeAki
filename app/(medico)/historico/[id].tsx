@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -5,6 +6,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Skeleton, SkeletonLista } from '@/src/components/anim/Skeleton';
 import { VistaHistorico, type AcoesEdicao } from '@/src/components/shared/VistaHistorico';
 import { Avatar } from '@/src/components/ui/Avatar';
+import { Button } from '@/src/components/ui/Button';
 import { Estado } from '@/src/components/ui/Estado';
 import { useRecurso } from '@/src/hooks/useRecurso';
 import { paraErroApi } from '@/src/services/api';
@@ -12,6 +14,7 @@ import { removerCondicao } from '@/src/services/condicao.service';
 import { obterHistoricoCompleto } from '@/src/services/paciente.service';
 import { encerrarPrescricao } from '@/src/services/prescricao.service';
 import { toast } from '@/src/store/toast.store';
+import { exportarHistoricoPdf } from '@/src/utils/historicoPdf';
 import { colors, fontFamily, spacing } from '@/src/theme';
 
 export default function HistoricoMedico() {
@@ -19,6 +22,7 @@ export default function HistoricoMedico() {
   const { id } = useLocalSearchParams<{ id: string }>();
   // Recarrega ao voltar dos formulários
   const historico = useRecurso(() => obterHistoricoCompleto(id), [id], { aoFocar: true });
+  const [aExportar, setAExportar] = useState(false);
 
   const irParaFicha = () => router.replace(`/(medico)/paciente/${id}` as any);
 
@@ -38,6 +42,18 @@ export default function HistoricoMedico() {
         ...(dados ? { dados: JSON.stringify(dados) } : {}),
       },
     } as any);
+  }
+
+  async function exportarPdf() {
+    if (!historico.dados) return;
+    setAExportar(true);
+    try {
+      await exportarHistoricoPdf(historico.dados);
+    } catch {
+      toast.erro('Não foi possível gerar o PDF');
+    } finally {
+      setAExportar(false);
+    }
   }
 
   const edicao: AcoesEdicao = {
@@ -139,6 +155,15 @@ export default function HistoricoMedico() {
         aoAtualizar={historico.atualizar}
         edicao={edicao}
         topo={topo}
+        rodape={
+          <Button
+            titulo="Exportar histórico completo (PDF)"
+            icone="file-pdf-box"
+            variante="secundario"
+            onPress={exportarPdf}
+            carregando={aExportar}
+          />
+        }
       />
 
     </View>

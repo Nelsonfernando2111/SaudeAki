@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Perfil, Role } from '@/src/types';
 
-const CHAVE_SESSAO = '@idclin:sessao';
+const CHAVE_SESSAO = '@saudeid:sessao';
 
 export interface Sessao {
   perfil: Perfil;

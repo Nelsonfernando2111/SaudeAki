@@ -20,6 +20,7 @@ export default function MedicoLayout() {
       <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
       <Stack.Screen name="paciente/[id]" options={comCabecalho('Ficha de Emergência')} />
       <Stack.Screen name="historico/[id]" options={comCabecalho('Histórico Clínico')} />
+      <Stack.Screen name="biometria" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

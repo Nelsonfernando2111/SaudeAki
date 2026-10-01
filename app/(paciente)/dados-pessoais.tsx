@@ -13,7 +13,8 @@ import { Button } from '@/src/components/ui/Button';
 import { Input } from '@/src/components/ui/Input';
 import { Opcoes } from '@/src/components/ui/Opcoes';
 import { paraErroApi } from '@/src/services/api';
-import { atualizarMeuPerfil, obterMeuPerfil } from '@/src/services/paciente.service';
+import { atualizarMeuPerfil, obterMeuHistorico, obterMeuPerfil } from '@/src/services/paciente.service';
+import { exportarHistoricoPdf } from '@/src/utils/historicoPdf';
 import { useSessaoStore } from '@/src/store/sessao.store';
 import { toast } from '@/src/store/toast.store';
 import { dataNoPassado, dataParaApi, formatarData } from '@/src/utils/datas';
@@ -78,6 +79,18 @@ export default function DadosPessoais() {
   const definirPaciente = useSessaoStore((s) => s.definirPaciente);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(!paciente);
+  const [aExportar, setAExportar] = useState(false);
+
+  async function exportarPdf() {
+    setAExportar(true);
+    try {
+      await exportarHistoricoPdf(await obterMeuHistorico());
+    } catch (e) {
+      toast.erro(paraErroApi(e).message || 'Não foi possível gerar o PDF');
+    } finally {
+      setAExportar(false);
+    }
+  }
   const { estilo, tremer } = useTremor();
 
   const { control, handleSubmit, formState, reset } = useForm<Entrada, unknown, Saida>({
@@ -275,6 +288,16 @@ export default function DadosPessoais() {
                 if (p) definirPaciente(p);
                 else if (paciente) definirPaciente({ ...paciente, documentoIdentidadeUrl: null });
               }}
+            />
+          </View>
+
+          <View style={styles.documento}>
+            <Button
+              titulo="Exportar histórico completo (PDF)"
+              icone="file-pdf-box"
+              variante="secundario"
+              onPress={exportarPdf}
+              carregando={aExportar}
             />
           </View>
         </ScrollView>

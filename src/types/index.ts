@@ -1,5 +1,5 @@
 /* =====================================================================
- * Tipos da API IDCLIN / txunaSaude (ver documentação da API)
+ * Tipos da API SaudeId / txunaSaude (ver documentação da API)
  * ===================================================================== */
 
 /** Perfil usado pela app (só paciente e médico têm interface) */
@@ -296,6 +296,7 @@ export interface FichaEmergencia {
   nomeCompleto: string;
   tipoSanguineo: { grupoSanguineo: GrupoSanguineo | null; fatorRh: FatorRh | null } | null;
   diabetico?: boolean;
+  contactoEmergencia?: string | null;
   alergias: CondicaoMedica[];
   condicoesCronicas: CondicaoMedica[];
   medicacaoAtiva: MedicacaoEmergencia[];

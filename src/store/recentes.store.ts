@@ -32,6 +32,6 @@ export const useRecentesStore = create<RecentesState>()(
         })),
       limpar: () => set({ pacientes: [] }),
     }),
-    { name: '@idclin:recentes', storage: createJSONStorage(() => AsyncStorage) }
+    { name: '@saudeid:recentes', storage: createJSONStorage(() => AsyncStorage) }
   )
 );

@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "idclin",
-    "slug": "idclin",
+    "name": "SaudeId",
+    "slug": "saudeid",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "idclin",
+    "scheme": "saudeid",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.idclin.app"
+      "bundleIdentifier": "com.saudeid.app"
     },
     "android": {
-      "package": "com.idclin.app",
+      "package": "com.saudeid.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -54,8 +54,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "A IDCLIN precisa de acesso às fotos para anexar resultados de exames.",
-          "cameraPermission": "A IDCLIN precisa da câmara para fotografar resultados de exames.",
+          "photosPermission": "A SaudeId precisa de acesso às fotos para anexar resultados de exames.",
+          "cameraPermission": "A SaudeId precisa da câmara para fotografar resultados de exames.",
           "microphonePermission": false
         }
       ]

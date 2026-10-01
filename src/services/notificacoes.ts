@@ -22,7 +22,7 @@ import { registarTokenFcm } from './paciente.service';
  * ===================================================================== */
 
 export const CANAL_PEDIDOS = 'pedidos-acesso';
-const TAREFA_PUSH = 'IDCLIN_PUSH_PEDIDO_ACESSO';
+const TAREFA_PUSH = 'SAUDEID_PUSH_PEDIDO_ACESSO';
 
 /** Dados que o backend envia no push */
 export interface DadosPushPedido {

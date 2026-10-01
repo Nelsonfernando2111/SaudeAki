@@ -6,8 +6,11 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Avatar } from '@/src/components/ui/Avatar';
 import { Button } from '@/src/components/ui/Button';
 import { LinhaInfo } from '@/src/components/ui/LinhaInfo';
+import { obterMeuHistorico } from '@/src/services/paciente.service';
 import { useSessaoStore } from '@/src/store/sessao.store';
+import { toast } from '@/src/store/toast.store';
 import { tipoSanguineo } from '@/src/utils/clinico';
+import { exportarHistoricoPdf } from '@/src/utils/historicoPdf';
 import { colors, fontFamily, radius, spacing } from '@/src/theme';
 
 export default function Perfil() {
@@ -15,6 +18,19 @@ export default function Perfil() {
   const paciente = useSessaoStore((s) => s.paciente);
   const sair = useSessaoStore((s) => s.sair);
   const [aSair, setASair] = useState(false);
+  const [aExportar, setAExportar] = useState(false);
+
+  async function exportarPdf() {
+    if (aExportar) return;
+    setAExportar(true);
+    try {
+      await exportarHistoricoPdf(await obterMeuHistorico());
+    } catch {
+      toast.erro('Não foi possível gerar o PDF');
+    } finally {
+      setAExportar(false);
+    }
+  }
 
   function confirmarSaida() {
     Alert.alert('Terminar sessão', 'Tem a certeza que deseja sair?', [
@@ -57,6 +73,12 @@ export default function Perfil() {
             valor={tipoSanguineo(paciente?.grupoSanguineo, paciente?.fatorRh)}
           />
           <LinhaInfo icone="phone-outline" titulo="Telefone" valor={paciente?.telefone} />
+          <LinhaInfo
+            icone="file-pdf-box"
+            titulo="Exportar histórico completo (PDF)"
+            valor={aExportar ? 'A gerar…' : null}
+            onPress={exportarPdf}
+          />
           <LinhaInfo
             icone="shield-lock-outline"
             titulo="Quem acedeu aos meus dados"

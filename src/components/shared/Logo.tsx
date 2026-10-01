@@ -36,7 +36,7 @@ export function Logo({
       </View>
 
       {mostrarTexto && (
-        <Text style={[styles.nome, { color: corTexto, fontSize: tamanho * 0.3 }]}>IDCLIN</Text>
+        <Text style={[styles.nome, { color: corTexto, fontSize: tamanho * 0.3 }]}>SAUDEID</Text>
       )}
       {mostrarSlogan && (
         <Text style={[styles.slogan, { color: corSlogan }]}>A sua saúde, sempre consigo</Text>
